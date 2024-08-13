@@ -126,7 +126,7 @@ sema_up (struct semaphore *sema) {
   }
 	sema->value++;
 	// unblock된 thread가 running thread보다 우선순위가 높을 수 있으므로, CPU 선점이 일어나게 해준다.
-  	thread_test_preemption ();
+  thread_test_preemption ();
 	intr_set_level (old_level);
 }
 

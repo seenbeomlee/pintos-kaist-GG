@@ -775,6 +775,7 @@ void
 thread_test_preemption (void)
 {
   if (!list_empty (&ready_list) &&
+	!intr_context() &&
   // priority1 < priority2 라면, priority2의 우선순위가 더 높음을 의미한다. 또한 이것이 list의 맨 앞에 추가된다.
   thread_current ()->priority <
   list_entry (list_front (&ready_list), struct thread, elem)->priority)

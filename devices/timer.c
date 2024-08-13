@@ -82,6 +82,7 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
+/* ticks란, PintOS 내부에서 시간을 나타내기 위한 값으로 부팅 이후에 일정한 시간마다 1씩 증가한다. */
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
@@ -134,6 +135,8 @@ timer_print_stats (void) {
 }
 
 /* Timer interrupt handler. */
+/* running 중인 thread는 일정 시간이 지나면 ready, dying, blocked 되어야 하는데, 이를 수행하지 않을 경우를 대비한다. */
+/* timer 인터럽트는 매 tick 마다 ticks 라는 변수를 증가시킴으로써 시간을 잰다. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;

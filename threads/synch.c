@@ -214,9 +214,9 @@ lock_acquire (struct lock *lock) {
 		list_insert_ordered (&lock->holder->donations, &cur->donation_elem,
 							thread_compare_donate_priority, 0); // lock->holder의 donations list에 현재 thread를 추가한다.
 		if (!thread_mlfqs) {  /**  advanced scheduler (mlfqs) 구현 */
-		// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
-		// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
-		donate_priority (); 
+			// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
+			// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
+			donate_priority (); 
 		}
 	}
 	sema_down (&lock->semaphore); // lock에 대한 요청이 들어오면, sema_down에서 일단 멈췄다가,

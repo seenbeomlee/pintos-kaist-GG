@@ -357,7 +357,7 @@ thread_set_priority (int new_priority) {
 	// 이는 thread_set_priority에 refresh_priority() 함수를 추가하는 것으로 간단하게 가능하다.
 	// thread_current ()->priority = new_priority; 원래 존재하던 코드 priority -> init_priority로 변경.
 	thread_current ()->init_priority = new_priority;
-  	refresh_priority ();
+  refresh_priority ();
 
 /* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
 	thread_test_preemption ();

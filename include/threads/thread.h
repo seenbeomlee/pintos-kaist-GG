@@ -120,6 +120,19 @@ struct thread /* TCB 영역의 구성 */
 /* ********** ********** ********** new functions below ********** ********** ********** */
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
     int64_t wakeup_time; /* block된 스레드가 꺠어나야 할 tick을 저장한 변수 추가 */
+
+/* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
+	// thread가 priority를 양도받았다가 다시 반납할 때 원래의 priority를 복원할 수 있도록 고유의 값 저장하는 변수
+    int init_priority;
+
+    // thread가 현재 얻기 위해 기다리고 있는 lock으로, thread는 이 lock이 release 되기를 기다린다.
+    // 즉, thread B가 얻기 위해 기다리는 lock을 현재 보유한 thread A에게 자신의 priority를 주는 것이므로, 이를 받은 thread A의 donations에 thread B가 기록된다.
+    struct lock *wait_on_lock; 
+
+	// 자신에게 priority를 나누어진 thread들의 list. 왜 thread들이냐면, Multiple donation 때문이다.
+    struct list donations;
+	// 이 list를 관리하기 위한 element로, thread 구조체의 elem과 구분하여 사용한다.
+    struct list_elem donation_elem; 
 };
 
 /* If false (default), use round-robin scheduler.
@@ -166,3 +179,9 @@ void thread_awake(int64_t ticks);
 /* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
 bool thread_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
 void thread_test_preemption (void);
+
+/* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
+bool thread_compare_donate_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);

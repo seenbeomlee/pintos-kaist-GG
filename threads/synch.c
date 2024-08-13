@@ -202,8 +202,24 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
-	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	/**  priority donation 구현 */
+	// sema_down에 들어가기 전에 lock을 가지고 있는 thread에게 priority를 양도하는 작업이 필요하다.
+	struct thread *cur = thread_current ();
+
+	// lock->holder는 현재 lock을 소유하고 있는 thread를 가리킨다.
+	// lock_acquire()을 요청하는 thread가 실행되고 있다는 자체가 이미 lock을 가지고 있는 thread보다 우선순위가 높다는 뜻이기 때문에,
+	// if(cur->priority > lock->holder->priority) 등의 비교 조건은 필요하지 않다.
+	if (lock->holder) { 
+		cur->wait_on_lock = lock; // lock_acquire를 호출한 현재 thread의 wait_on_lock에 lock을 추가한다.
+		list_insert_ordered (&lock->holder->donations, &cur->donation_elem,
+							thread_compare_donate_priority, 0); // lock->holder의 donations list에 현재 thread를 추가한다.
+		donate_priority (); 
+	}
+	sema_down (&lock->semaphore); // lock에 대한 요청이 들어오면, sema_down에서 일단 멈췄다가,
+	// lock->holder = thread_current (); // 기존 코드는 lock이 사용가능하게 되면 자신이 다시 lock을 선점한다.
+
+	cur->wait_on_lock = NULL; // lock을 점유했으니 wait_on_lock에서 제거
+	lock->holder = cur;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -231,14 +247,29 @@ lock_try_acquire (struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+// lock은 value == 1이고, holder 정보를 가지고 있다는 것을 제외하고는 semaphore와 동일하게 동작한다.
+// lock_release 함수는, semaphore와 달리, lock_acquire()을 호출한 thread만이 호출할 수 있다는 제약이 존재한다는 점에서 다르다.
 void
-lock_release (struct lock *lock) {
-	ASSERT (lock != NULL);
-	ASSERT (lock_held_by_current_thread (lock));
+lock_release (struct lock *lock) 
+{
+  ASSERT (lock != NULL);
+  ASSERT (lock_held_by_current_thread (lock));
 
+/* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
+	// lock->holder = NULL;
+	// sema_up (&lock->semaphore);
+	// 현재(위에 두줄 있는 코드가 원래 코드)는 lock이 가진 holder를 비워주고, sema_up하는 것이 전부이다.
+	// sema_up하여 lock의 점유를 반환하기 전에,
+	// 이 lock을 사용하기 위해 나에게 priority를 빌려준 thread들을 donations list에서 제거하고,
+	// priority를 재설정 해주는 작업이 필요하다.
+	remove_with_lock (lock);
+	refresh_priority ();
+
+	// 아래는 original code
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds

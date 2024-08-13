@@ -157,7 +157,9 @@ timer_interrupt (struct intr_frame *args UNUSED) {
   }
 
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-	thread_awake (ticks); // ticks가 증가할 때마다 awake 작업을 수행한다.
+	if (get_next_tick_to_awake() <= ticks) {
+		thread_awake(ticks); // ticks가 증가할 때마다 awake 작업을 수행한다.
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

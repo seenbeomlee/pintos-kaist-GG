@@ -211,8 +211,7 @@ lock_acquire (struct lock *lock) {
 	// if(cur->priority > lock->holder->priority) 등의 비교 조건은 필요하지 않다.
 	if (lock->holder) { 
 		cur->wait_on_lock = lock; // lock_acquire를 호출한 현재 thread의 wait_on_lock에 lock을 추가한다.
-		list_insert_ordered (&lock->holder->donations, &cur->donation_elem,
-							thread_compare_donate_priority, 0); // lock->holder의 donations list에 현재 thread를 추가한다.
+       list_push_back(&lock->holder->donations, &cur->donation_elem);
 		if (!thread_mlfqs) {  /**  advanced scheduler (mlfqs) 구현 */
 			// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
 			// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
@@ -277,7 +276,7 @@ lock_release (struct lock *lock)
   	}
 
 	// 아래는 original code
-	lock->holder = NULL;
+	lock->holder = NULL; // 이거는 위로 올려도 fail 변함없음.
 	sema_up (&lock->semaphore);
 }
 
@@ -350,7 +349,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	// list_push_back 대신에 list_inserted_ordered 함수에 sema_compare_priority를 사용해서
 	// 가장 높은 우선순위를 가진 thread가 묶여있는 semaphore가 가장 앞으로 오도록 내림차순으로 cond->waiters list에 push 한다.
-  	list_insert_ordered (&cond->waiters, &waiter.elem, sema_compare_priority, 0);
+  list_insert_ordered (&cond->waiters, &waiter.elem, sema_compare_priority, 0);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);

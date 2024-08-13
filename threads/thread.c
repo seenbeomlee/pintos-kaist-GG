@@ -10,7 +10,7 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "threads/fixed_point.h"
+#include "threads/fixed_point.h" // for project 1: advanced scheduler
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -29,8 +29,10 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
 /* list for sleep */
 static struct list sleep_list; /* block된 스레드를 저장할 공간 */
+static int64_t next_tick_to_awake;
 
 /* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
 /** List of all processes.  Processes are added to this list
@@ -142,14 +144,14 @@ thread_init (void) {
    Also creates the idle thread. */
 void
 thread_start (void) {
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-  load_avg = LOAD_AVG_DEFAULT;
-  // 새롭게 추가한 변수를 초기화 하는 과정
-
 	/* Create the idle thread. */
 	struct semaphore idle_started;
 	sema_init (&idle_started, 0);
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
+
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+  load_avg = LOAD_AVG_DEFAULT;
+  // 새롭게 추가한 변수를 초기화 하는 과정
 
 	/* Start preemptive thread scheduling. */
 	intr_enable ();
@@ -232,7 +234,10 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 /* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
-  	thread_test_preemption ();
+  //thread_test_preemption ();
+	/** project1-Priority Scheduling */
+	if(t->priority > thread_current()->priority)
+		thread_yield();
 
 	return tid;
 }
@@ -313,8 +318,8 @@ thread_exit (void) {
 	process_exit ();
 #endif
 /* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-	// if (thread_mlfqs)
-  //       list_remove(&thread_current()->all_elem);
+	if (thread_mlfqs)
+    list_remove(&thread_current()->all_elem);
 /* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
 
 	/* Just set our status to dying and schedule another process.
@@ -488,17 +493,16 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 /* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
 	// 새롭게 추가한 요소를 초기화 하는 과정
-  t->init_priority = priority;
   t->wait_on_lock = NULL;
   list_init (&t->donations);
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-	// 새롭게 추가한 요소를 초기화 하는 과정
-	t->nice = NICE_DEFAULT;
-  t->recent_cpu = RECENT_CPU_DEFAULT;
-
 	t->magic = THREAD_MAGIC;
 
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+	// 새롭게 추가한 요소를 초기화 하는 과정
+	t->init_priority = priority;
+	t->nice = NICE_DEFAULT;
+  t->recent_cpu = RECENT_CPU_DEFAULT;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -695,7 +699,8 @@ thread_sleep (int64_t wakeup_ticks)
 
   ASSERT (cur != idle_thread); // CPU가 항상 실행 상태를 유지하게 하기 위해 idel thread는 sleep되지 않아야 한다.
 
-  cur->wakeup_time = wakeup_ticks; // 현재 running 중인 thread A가 일어날 시간을 저장
+	update_next_tick_to_awake(cur->wakeup_time = wakeup_ticks); // 현재 running 중인 thread A가 일어날 시간을 저장
+  // cur->wakeup_time = wakeup_ticks; // 현재 running 중인 thread A가 일어날 시간을 저장
   list_push_back (&sleep_list, &cur->elem); // sleep_list 에 추가한다.
   thread_block (); //thread A를 block 상태로 변경한다.
    
@@ -706,19 +711,39 @@ thread_sleep (int64_t wakeup_ticks)
 void
 thread_awake (int64_t ticks)
 {
-  struct list_elem *e = list_begin (&sleep_list);
+    next_tick_to_awake = INT64_MAX;
 
-  /* sleep_list를 돌면서 일어날 시간이 지난 thread들을 찾아서 ready list로 옮겨주고, thread 상태를 ready state로 변경시킨다. */
-  while (e != list_end (&sleep_list)){
-    struct thread *t = list_entry (e, struct thread, elem);
-    /* thread e가 일어날 시간이 되었는지 확인한다. */
-    if (t->wakeup_time <= ticks){
-      e = list_remove (e); // 일어날 시간이 되었다면 sleep_list에서 제거한다.
-      thread_unblock(t); // 그 후, thread를 unblock한다.
-    } 
-    else 
-      e = list_next(e); // 일어날 시간이 되지 않았다면 다음 thread로 이동한다.
-  }
+    struct list_elem *sleeping;
+    sleeping = list_begin(&sleep_list);  // take sleeping thread
+
+    while (sleeping != list_end(&sleep_list)) {  // for all sleeping threads
+        struct thread *th = list_entry(sleeping, struct thread, elem);
+
+        if (ticks >= th->wakeup_time) 
+		{
+            sleeping = list_remove(&th->elem);  // delete thread
+            thread_unblock(th);                 // unblock thread
+        } 
+		else 
+		{
+            sleeping = list_next(sleeping);              // move to next sleeping thread
+            update_next_tick_to_awake(th->wakeup_time);  // update wakeup_tick
+        }
+    }
+}
+
+void 
+update_next_tick_to_awake (int64_t ticks) 
+{
+	// find smallest tick
+    next_tick_to_awake = (next_tick_to_awake > ticks) ? ticks : next_tick_to_awake;
+}
+
+/** project1-Alarm Clock */
+int64_t
+get_next_tick_to_awake(void)
+{
+	return next_tick_to_awake;
 }
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
 

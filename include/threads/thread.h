@@ -28,8 +28,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-#define PRI_MAX 63               
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */          
 #define NICE_DEFAULT 0
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
@@ -185,6 +184,8 @@ void do_iret (struct intr_frame *tf);
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
 void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
+void update_next_tick_to_awake (int64_t ticks);
+int64_t get_next_tick_to_awake (void);
 
 /* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
 bool thread_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);

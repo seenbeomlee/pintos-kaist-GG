@@ -162,3 +162,7 @@ void do_iret (struct intr_frame *tf);
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
 void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
+
+/* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
+bool thread_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
+void thread_test_preemption (void);

@@ -210,6 +210,8 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+/* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
+  	thread_test_preemption ();
 
 	return tid;
 }
@@ -244,7 +246,8 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem); // list push back 함수는 round-robin 방식에서 elem을 list의 맨 뒤에 push 하는 함수이다.
+  list_insert_ordered (&ready_list, &t->elem, thread_compare_priority, 0);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -307,7 +310,8 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+    	// list_push_back (&ready_list, &cur->elem); 이는 round-robin 방식에 사용되는 단순 list_push_back() 함수이다.
+    	list_insert_ordered (&ready_list, &curr->elem, thread_compare_priority, 0);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -316,6 +320,9 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+
+/* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
+	thread_test_preemption ();
 }
 
 /* Returns the current thread's priority. */
@@ -633,4 +640,39 @@ thread_awake (int64_t ticks)
     else 
       e = list_next(e); // 일어날 시간이 되지 않았다면 다음 thread로 이동한다.
   }
+}
+/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
+
+/* ********** ********** ********** project 1 : priority schedulder(1) ********** ********** ********** */
+// list_insert_ordered(struct list *list, struct list_elem *elem, list_less_func *less, void *aux)
+// list_insert(struct list_elem *before, struct list_elem *elem) 해당 함수는 elem을 e의 '앞에' 삽입한다.
+// 우리는 ready_list에서 thread를 pop할 때 가장 앞에서 꺼내기로 하였다.
+// 따라서, 가장 앞에 priority가 가장 높은 thread가 와야 한다.
+// 즉, ready_list는 내림차순으로 정렬되어야 한다.
+// if(less (elem, e, aux))가 elem > e인 순간에 break; 를 해주어야 한다.
+// 즉, 우리가 만들어야 하는 order 비교함수 less(elem, e, aux)는 elem > e일 때 true를 반환하는 함수이다.
+bool
+thread_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED)
+{
+  return list_entry (l, struct thread, elem)->priority
+       > list_entry (s, struct thread, elem)->priority;
+}
+
+// 현재 실행중인 running thread의 priority가 바뀌는 순간이 있다.
+// 이때 바뀐 priority가 ready_list의 가장 높은 priority보다 낮다면 CPU 점유를 넘겨주어야 한다.
+// 현재 실행중인 thread의 priority가 바뀌는 순간은 두 가지 경우이다.
+// (1) thread_create() -- thread가 새로 생성되어서 ready_list에 추가된다.
+// (2) thread_set_priority() -- 현재 실행중인 thread의 우선순위가 재조정된다.
+// 두 경우의 마지막에 running thread와 ready_list의 가장 앞의 thread의 priority를 비교하는 코드를 넣어주어야 한다.
+// running thread와 ready_list의 가장 앞 thread의 priority를 비교하고,
+// 만약 ready_list의 thread가 더 높은 priority를 가진다면 thread_yield()를 실행하여 CPU의 점유권을 넘겨준다.
+// 이 함수를 (1), (2)에 추가한다.
+void
+thread_test_preemption (void)
+{
+  if (!list_empty (&ready_list) &&
+  // priority1 < priority2 라면, priority2의 우선순위가 더 높음을 의미한다. 또한 이것이 list의 맨 앞에 추가된다.
+  thread_current ()->priority <
+  list_entry (list_front (&ready_list), struct thread, elem)->priority)
+    thread_yield();
 }

@@ -142,6 +142,20 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+  if (thread_mlfqs) { // mlfqs option이 들어왔을 때만 advanced scheduler가 작동한다.
+    mlfqs_increment_recent_cpu ();
+    if (ticks % 4 == 0) {
+      mlfqs_recalculate_priority ();
+      // TIMER_FREQ 값은 1초에 몇 개의 ticks 이 실행되는지를 나타내는 값으로, thread.h에 100으로 정의되어 있다.
+      // 이에 따라, pintos kernel은 1초에 100 ticks가 실행되고, 1ticks = 1ms를 의미한다.
+      if (ticks % TIMER_FREQ == 0) { 
+        mlfqs_recalculate_recent_cpu ();
+        mlfqs_calculate_load_avg ();
+      }
+    }
+  }
+
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
 	thread_awake (ticks); // ticks가 증가할 때마다 awake 작업을 수행한다.
 }

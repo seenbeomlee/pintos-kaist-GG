@@ -28,6 +28,12 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+#define PRI_MAX 63               
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -99,7 +105,7 @@ struct thread /* TCB 영역의 구성 */
    실행되는 순간에 이 stack이 다시 CPU의 Register로 로드되어 실행을 이어갈 수 있게 된다. 
    */
     int priority;                       /**< Priority. */
-    struct list_elem allelem;           /**< List element for all threads list. */
+    struct list_elem all_elem;           /**< List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
@@ -133,12 +139,16 @@ struct thread /* TCB 영역의 구성 */
     struct list donations;
 	// 이 list를 관리하기 위한 element로, thread 구조체의 elem과 구분하여 사용한다.
     struct list_elem donation_elem; 
+
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+ 	int nice;
+   	int recent_cpu;
 };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
-extern bool thread_mlfqs;
+extern bool thread_mlfqs; // for lab4 Advanced Scheduler
 
 void thread_init (void);
 void thread_start (void);
@@ -185,3 +195,11 @@ bool thread_compare_donate_priority (const struct list_elem *l, const struct lis
 void donate_priority (void);
 void remove_with_lock (struct lock *lock);
 void refresh_priority (void);
+
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+void mlfqs_calculate_priority (struct thread *t);
+void mlfqs_calculate_recent_cpu (struct thread *t);
+void mlfqs_calculate_load_avg (void);
+void mlfqs_increment_recent_cpu (void);
+void mlfqs_recalculate_recent_cpu (void);
+void mlfqs_recalculate_priority (void);

@@ -213,7 +213,11 @@ lock_acquire (struct lock *lock) {
 		cur->wait_on_lock = lock; // lock_acquire를 호출한 현재 thread의 wait_on_lock에 lock을 추가한다.
 		list_insert_ordered (&lock->holder->donations, &cur->donation_elem,
 							thread_compare_donate_priority, 0); // lock->holder의 donations list에 현재 thread를 추가한다.
+		if (!thread_mlfqs) {  /**  advanced scheduler (mlfqs) 구현 */
+		// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
+		// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
 		donate_priority (); 
+		}
 	}
 	sema_down (&lock->semaphore); // lock에 대한 요청이 들어오면, sema_down에서 일단 멈췄다가,
 	// lock->holder = thread_current (); // 기존 코드는 lock이 사용가능하게 되면 자신이 다시 lock을 선점한다.
@@ -262,8 +266,15 @@ lock_release (struct lock *lock)
 	// sema_up하여 lock의 점유를 반환하기 전에,
 	// 이 lock을 사용하기 위해 나에게 priority를 빌려준 thread들을 donations list에서 제거하고,
 	// priority를 재설정 해주는 작업이 필요하다.
-	remove_with_lock (lock);
-	refresh_priority ();
+	// remove_with_lock (lock);
+    // refresh_priority ();
+/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+  	if (!thread_mlfqs) {
+    // priority donation은 mlfqs에서는 비활성화 한다.
+    // 왜냐하면, mlfqs scheduler는 시간에 따라 priority가 재조정되기 때문이다.
+    	remove_with_lock (lock);
+    	refresh_priority ();
+  	}
 
 	// 아래는 original code
 	lock->holder = NULL;

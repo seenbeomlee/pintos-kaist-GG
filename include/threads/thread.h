@@ -112,6 +112,9 @@ struct thread /* TCB 영역의 구성 */
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+    struct file *runn_file;  // 실행중인 파일
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

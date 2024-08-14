@@ -43,14 +43,25 @@ process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
 
-	/* Make a copy of FILE_NAME.
-	 * Otherwise there's a race between the caller and load(). */
+	/* Make a copy of FILE_NAME. FILE_NAME의 사본을 만듭니다.
+	 * Otherwise there's a race between the caller and load(). 그렇지 않으면 호출자와 load() 사이에 race가 발생합니다. 
+	 */
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
-	/* Create a new thread to execute FILE_NAME. */
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+/* ********** ********** ********** for test ********** ********** ********** */
+    /* Project2: for Test Case - 직접 프로그램을 실행할 때에는 이 함수를 사용하지 않지만 make check에서
+     * 이 함수를 통해 process_create를 실행하기 때문에 이 부분을 수정해주지 않으면 Test Case의 Thread_name이
+     * 커맨드 라인 전체로 바뀌게 되어 Pass할 수 없다.
+		 * 즉, 아래의 두 줄은 테스트를 위한 임시 코드임
+     */
+    char *ptr;
+    strtok_r(file_name, " ", &ptr);
+
+	/* Create a new thread to execute FILE_NAME. FILE_NAME을 실행할 새 스레드를 만듭니다. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
@@ -176,14 +187,42 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+	char *ptr, *arg;
+  int arg_cnt = 0;
+  char *arg_list[32];
+  // char *ptr == char *save_ptr
+	// char *arg == char *token
+	// int arg_cht == int argc
+ 	// char *arg_list[32] == char *argv[64]
+ 	
+	// 문제는, 만약 입력으로 들어오는 명령이 argument를 포함하고 있다면,
+	// load()의 코드에서 filename이 이제 진정한 파일의 이름이 아닐 수 있다는 점이다.
+	// 따라서, 순수한 실행 파일의 이름을 얻어내기 위해서, 파싱 자체는 load() 함수의 시작 즈음에 이루어져야 한다.
+	// 파싱을 위해서 manual에서는 strtok_r() 함수를 사용할 것을 권장하기에, 이를 사용한다.
+	// 또한, 대대적 개편 이후 pintOS는 x86이 아닌, x86-64 방식을 채택하게 되었다.
+	// 따라서, pintOS에서 포인터 변수의 크기가 8 bytes 씩이다.
+	for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr))
+  arg_list[arg_cnt++] = arg;
+
 	/* And then load the binary */
 	// load() 함수는 실행할 프로그램의 binary 파일을 메모리에 올리는 역할을 한다.
+	// file_name == 사용자가 커맨드 라인에 적은 f_name을 받은 변수이다.
+	// _if == 인터럽트 프레임 구조체이다.
 	success = load (file_name, &_if);
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+	argument_stack(arg_list, arg_cnt, &_if);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+/* ********** ********** ********** for test ********** ********** ********** */
+// 이 함수는 메모리의 내용을 16진수 형식으로 출력해줘서 스택에 저장된 값들을 확인할 수 있다.
+  hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 0x47480000	
 
 	/* Start switched process. */
 	// load()가 성공적으로 끝난 뒤에는 바로 해당 프로세스를 실행하도록 리턴하는 것으로, process_exec()도 끝난다.
@@ -201,11 +240,19 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+// child process / 자식 프로세스가 종료될 때까지 대기한다.
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+/* ********** ********** ********** for test ********** ********** ********** */
+// 테스트를 위한 일시적인 루프
+// 핀토스는 유저 프로세스를 생성한 후 프로세스 종료를 대기해야 하는데 자식 프로세스가 종료될 때까지 일정시간 대기한다.
+    for (int i = 0; i < 1000000000; i++) {}
+	
 	return -1;
 }
 
@@ -352,6 +399,10 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+	t->runn_file = file;
+	file_deny_write(file);
+	
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -444,7 +495,7 @@ load (const char *file_name, struct intr_frame *if_) {
 done:
 	/* We arrive here whether the load is successful or not. */
 	// 열었던 실행 파일을 닫는 것으로 load()가 끝난다.
-	file_close (file);
+	// file_close (file);
 	return success;
 }
 
@@ -592,6 +643,45 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+// 인자값을 스택에 올리는 함수이다.
+// argument_stack 함수는 char **argv로 받은 문자열 배열과 int argc로 받은 인자 개수를 처리한다.
+void argument_stack(char **argv, int argc, struct intr_frame *if_) {
+    char *arg_addr[100]; // char *agr_addr[100]은 문자열 주소를 저장하는 배열이다.
+    int argv_len;
+
+    // argv 배열을 역순으로 stack에 넣는다.
+		// 그리고 각 문자열의 길이에 1을 더한 만큼의 공간을 할당하여 문자열을 복사한다.
+    for (int i = argc - 1; i >= 0; i--) {
+        argv_len = strlen(argv[i]) + 1;
+        if_->rsp -= argv_len;
+        memcpy(if_->rsp, argv[i], argv_len);
+        arg_addr[i] = if_->rsp;
+    }
+
+    // stack을 8 byte로 정렬한다.
+    while (if_->rsp % 8)
+        *(uint8_t *)(--if_->rsp) = 0;
+
+    if_->rsp -= 8;
+    memset(if_->rsp, 0, sizeof(char *));
+
+    // arg_addr 배열의 주소를 stack에 넣는다.
+    for (int i = argc - 1; i >= 0; i--) {
+        if_->rsp -= 8;
+        memcpy(if_->rsp, &arg_addr[i], sizeof(char *));
+    }
+
+    // 이때, 마지막으로 NULL 포인터를 넣어 인자들의 끝을 표시한다.
+    if_->rsp = if_->rsp - 8;
+    memset(if_->rsp, 0, sizeof(void *));
+
+    // stack에는 인자의 개수가 RDI 레지스터에, 그리고 인자들의 주소가 RSI 레지스터에 저장된다.
+    if_->R.rdi = argc;
+    if_->R.rsi = if_->rsp + 8;
+}
+
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the

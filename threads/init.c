@@ -93,6 +93,8 @@ main (void) {
 #endif
 
 	/* Initialize interrupt handlers. */
+	// main 함수는 pintos를 실행시키는 함수이다. 
+	// 처음 실행할 때 thread와 memory, page, interrupt handler 등을 초기화 한다.
 	intr_init ();
 	timer_init ();
 	kbd_init ();
@@ -244,6 +246,7 @@ run_task (char **argv) {
 	const char *task = argv[1];
 
 	printf ("Executing '%s':\n", task);
+	// 만일, user_process가 생성되었다면, kernal은 process 종료를 대기한다.
 #ifdef USERPROG
 	if (thread_tests){
 		run_test (task);
@@ -269,7 +272,7 @@ run_actions (char **argv) {
 
 	/* Table of supported actions. */
 	static const struct action actions[] = {
-		{"run", 2, run_task},
+		{"run", 2, run_task}, // 응용 프로그램이 run인 경우, run_task() 함수를 호출한다.
 #ifdef FILESYS
 		{"ls", 1, fsutil_ls},
 		{"cat", 2, fsutil_cat},

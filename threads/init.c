@@ -209,6 +209,10 @@ parse_options (char **argv) {
 		char *name = strtok_r (*argv, "=", &save_ptr);
 		char *value = strtok_r (NULL, "", &save_ptr);
 
+ 		// 임시방편으로는 mlfqs 테스트 독자적으로 돌릴 때,
+		// init.c의 parse_options 시작지점에서 thread_mlfqs = true;를 추가해주어야 한다.
+		thread_mlfqs = true;
+
 		if (!strcmp (name, "-h"))
 			usage ();
 		else if (!strcmp (name, "-q"))

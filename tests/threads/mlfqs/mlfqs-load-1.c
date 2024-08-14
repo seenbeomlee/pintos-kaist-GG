@@ -21,6 +21,12 @@ test_mlfqs_load_1 (void)
   int elapsed;
   int load_avg;
   
+  // 버그있다. build 폴더에서 pintos -- -q run mlfqs-load-1 실행시, ACCERTION 위반으로 PANIC 에러가 뜸.
+  // 이는 init.c 222 line에서 thread-mlfas = true가 되지 않기 때문인데, 
+  // 무엇 떄문인지는 모르겠지만, 커널에 입력된 테스트 문구를 통해서는 else if (!strcmp (name, "-mlfqs")) 가 통과되지 않기 떄문으로 보임.
+  // 일단 mlfqs-load-1로 아래의 문장을 추가함으로써 테스트가 정상적으로 PASS됨을 확인하였고,
+  // 임시방편으로는 mlfqs 테스트 독자적으로 돌릴 때는 init.c의 parse_options 시작지점에서 thread_mlfqs = true;를 추가해주어야 할 듯.
+  // thread_mlfqs = true;
   ASSERT (thread_mlfqs);
 
   msg ("spinning for up to 45 seconds, please wait...");

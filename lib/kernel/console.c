@@ -139,6 +139,16 @@ puts (const char *s) {
 }
 
 /* Writes the N characters in BUFFER to the console. */
+/** write(int fd, void *buffer, unsigned int size)
+ * read와 마찬가지로, write도 락을 사용하여 구현해야 한다.
+ * 값을 쓸 파일의 디스크립터 fd, 쓸 값이 들어있는 buffer, 쓸 값의 크기인 size를 파라미터로 받는다.
+ * 다른 파일에 값을 쓰는 경우에는 file_write 함수를 통해 구현할 수 있다.
+ * 파일에 값을 쓰지 못한 경우에는 -1을 return 하며, 값을 쓴 경우에는 쓴 값의 크기를 return 한다.
+ * 
+ * write도 read와 비슷하게 standard output에 값을 쓸 수 있다. 
+ * 파일 디스크립터의 값은 1이며, 콘솔에 값을 쓰는 경우에 해당한다.
+ * 이때는 putbuf 함수를 통해 구현한다.
+ */
 void
 putbuf (const char *buffer, size_t n) {
 	acquire_console ();

@@ -202,6 +202,15 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	/**  advanced scheduler (mlfqs) 구현 */
+	// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
+	// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
+  if (thread_mlfqs) {
+    sema_down (&lock->semaphore);
+    lock->holder = thread_current ();
+    return ;
+  }
+
 	/**  priority donation 구현 */
 	// sema_down에 들어가기 전에 lock을 가지고 있는 thread에게 priority를 양도하는 작업이 필요하다.
 	struct thread *cur = thread_current ();
@@ -212,12 +221,8 @@ lock_acquire (struct lock *lock) {
 	if (lock->holder) { 
 		cur->wait_on_lock = lock; // lock_acquire를 호출한 현재 thread의 wait_on_lock에 lock을 추가한다.
     list_insert_ordered (&lock->holder->donations, &cur->donation_elem, 
-    			thread_compare_donate_priority, 0);
-		if (!thread_mlfqs) {  /**  advanced scheduler (mlfqs) 구현 */
-			// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
-			// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
-			donate_priority (); 
-		}
+    			thread_compare_donate_priority, 0); 
+		donate_priority (); 
 	}
 	sema_down (&lock->semaphore); // lock에 대한 요청이 들어오면, sema_down에서 일단 멈췄다가,
 	// lock->holder = thread_current (); // 기존 코드는 lock이 사용가능하게 되면 자신이 다시 lock을 선점한다.
@@ -259,6 +264,12 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+	lock->holder = NULL;
+  if (thread_mlfqs) {
+    sema_up (&lock->semaphore);
+    return ;
+  }
+
 /* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
 	// lock->holder = NULL;
 	// sema_up (&lock->semaphore);
@@ -269,15 +280,12 @@ lock_release (struct lock *lock)
 	// remove_with_lock (lock);
     // refresh_priority ();
 /* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-  	if (!thread_mlfqs) {
-    // priority donation은 mlfqs에서는 비활성화 한다.
-    // 왜냐하면, mlfqs scheduler는 시간에 따라 priority가 재조정되기 때문이다.
-    	remove_with_lock (lock);
-    	refresh_priority ();
-  	}
-
+  // priority donation은 mlfqs에서는 비활성화 한다.
+  // 왜냐하면, mlfqs scheduler는 시간에 따라 priority가 재조정되기 때문이다.
+  remove_with_lock (lock);
+  refresh_priority ();
+	
 	// 아래는 original code
-	lock->holder = NULL; // 이거는 위로 올려도 fail 변함없음.
 	sema_up (&lock->semaphore);
 }
 

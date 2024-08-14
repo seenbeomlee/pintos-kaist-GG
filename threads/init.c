@@ -211,7 +211,7 @@ parse_options (char **argv) {
 
  		// 임시방편으로는 mlfqs 테스트 독자적으로 돌릴 때,
 		// init.c의 parse_options 시작지점에서 thread_mlfqs = true;를 추가해주어야 한다.
-		thread_mlfqs = true;
+		// thread_mlfqs = true;
 
 		if (!strcmp (name, "-h"))
 			usage ();

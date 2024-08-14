@@ -376,24 +376,19 @@ thread_get_priority (void) {
 void
 thread_set_nice (int nice UNUSED) 
 { // 현재 thread의 nice 값을 새 값으로 설정한다.
-	struct thread *t = thread_current();
-
   enum intr_level old_level = intr_disable (); // 각 값들을 변경할 시에는 interrupt를 비활성화 해야한다.
-  t->nice = nice;
-  mlfqs_calculate_priority (t);
+  thread_current ()->nice = nice;
+  mlfqs_calculate_priority (thread_current ());
   thread_test_preemption ();
   intr_set_level (old_level); // 다시 interrupt를 활성화 해준다.
-  
 }
 
 /** Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 { // 현재 thread의 nice 값을 반환한다.
-	struct thread *t = thread_current();
-
   enum intr_level old_level = intr_disable ();
-  int nice = t-> nice;
+  int nice = thread_current ()-> nice;
   intr_set_level (old_level);
   return nice;
 }
@@ -417,7 +412,7 @@ thread_get_recent_cpu (void)
   enum intr_level old_level = intr_disable ();
   // pintos document의 지시대로 100을 곱한 후 정수형으로 만들고 반올림하여 반환한다.
   // 정수형 반환값에서 소수점 둘째 자리까지의 값을 확인할 수 있도록 하는 용도이다.
-  int recent_cpu = fp_to_int_round (mult_mixed (thread_current ()-> recent_cpu, 100));
+  int recent_cpu= fp_to_int_round (mult_mixed (thread_current ()->recent_cpu, 100));
   intr_set_level (old_level);
   return recent_cpu;
 }

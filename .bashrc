@@ -1,0 +1,1 @@
+source ./home/pintos-kaist/activate

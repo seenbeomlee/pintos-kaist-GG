@@ -149,7 +149,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
       mlfqs_recalculate_priority ();
       // TIMER_FREQ 값은 1초에 몇 개의 ticks 이 실행되는지를 나타내는 값으로, thread.h에 100으로 정의되어 있다.
       // 이에 따라, pintos kernel은 1초에 100 ticks가 실행되고, 1ticks = 1ms를 의미한다.
-      if (ticks % TIMER_FREQ == 0) { 
+      if (ticks % TIMER_FREQ == 0) {
         mlfqs_recalculate_recent_cpu ();
         mlfqs_calculate_load_avg ();
       }
@@ -157,9 +157,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
   }
 
 /* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-	if (get_next_tick_to_awake() <= ticks) {
-		thread_awake(ticks); // ticks가 증가할 때마다 awake 작업을 수행한다.
-	}
+	thread_awake(ticks); // ticks가 증가할 때마다 awake 작업을 수행한다.
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

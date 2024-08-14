@@ -211,7 +211,8 @@ lock_acquire (struct lock *lock) {
 	// if(cur->priority > lock->holder->priority) 등의 비교 조건은 필요하지 않다.
 	if (lock->holder) { 
 		cur->wait_on_lock = lock; // lock_acquire를 호출한 현재 thread의 wait_on_lock에 lock을 추가한다.
-       list_push_back(&lock->holder->donations, &cur->donation_elem);
+    list_insert_ordered (&lock->holder->donations, &cur->donation_elem, 
+    			thread_compare_donate_priority, 0);
 		if (!thread_mlfqs) {  /**  advanced scheduler (mlfqs) 구현 */
 			// priority donation은 mlfqs scheduler에서는 사용하지 않는다.
 			// 왜냐하면, 시간에 따라 priority가 재조정되기 때문이다.
@@ -350,9 +351,9 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	// list_push_back 대신에 list_inserted_ordered 함수에 sema_compare_priority를 사용해서
 	// 가장 높은 우선순위를 가진 thread가 묶여있는 semaphore가 가장 앞으로 오도록 내림차순으로 cond->waiters list에 push 한다.
   list_insert_ordered (&cond->waiters, &waiter.elem, sema_compare_priority, 0);
-	lock_release (lock);
-	sema_down (&waiter.semaphore);
-	lock_acquire (lock);
+  lock_release (lock);
+  sema_down (&waiter.semaphore);
+  lock_acquire (lock);
 }
 
 /* If any threads are waiting on COND (protected by LOCK), then
@@ -372,9 +373,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	if (!list_empty (&cond->waiters)) {
 		/* ********** ********** ********** project 1 : priority scheduleing(2) ********** ********** ********** */
 	    // 앞선 경우와 마찬가지로, pop을 그대로 하되, wait 도중에 우선순위가 바뀌었을 수 있으니, list_sort로 내림차순으로 정렬해준다.
-    	list_sort (&cond->waiters, sema_compare_priority, 0);
-		sema_up (&list_entry (list_pop_front (&cond->waiters),
-					struct semaphore_elem, elem)->semaphore);
+    list_sort (&cond->waiters, sema_compare_priority, 0);
+    sema_up (&list_entry (list_pop_front (&cond->waiters),
+                          struct semaphore_elem, elem)->semaphore);
 	}
 }
 
@@ -395,15 +396,15 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 /* ********** ********** ********** new function below ********** ********** ********** */
 /* ********** ********** ********** project 1 : priority scheduleing(2) ********** ********** ********** */
-bool
+bool 
 sema_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED)
 {
-  struct semaphore_elem *l_sema = list_entry (l, struct semaphore_elem, elem);
-  struct semaphore_elem *s_sema = list_entry (s, struct semaphore_elem, elem);
+	struct semaphore_elem *l_sema = list_entry (l, struct semaphore_elem, elem);
+	struct semaphore_elem *s_sema = list_entry (s, struct semaphore_elem, elem);
 
-  struct list *waiter_l_sema = &(l_sema->semaphore.waiters);
-  struct list *waiter_s_sema = &(s_sema->semaphore.waiters);
+	struct list *waiter_l_sema = &(l_sema->semaphore.waiters);
+	struct list *waiter_s_sema = &(s_sema->semaphore.waiters);
 
-   return list_entry (list_begin (waiter_l_sema), struct thread, elem)->priority
-            > list_entry (list_begin (waiter_s_sema), struct thread, elem)->priority;
+	return list_entry (list_begin (waiter_l_sema), struct thread, elem)->priority
+		 > list_entry (list_begin (waiter_s_sema), struct thread, elem)->priority;
 }

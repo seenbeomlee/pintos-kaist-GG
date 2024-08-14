@@ -177,6 +177,7 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
 	/* And then load the binary */
+	// load() 함수는 실행할 프로그램의 binary 파일을 메모리에 올리는 역할을 한다.
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
@@ -185,6 +186,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/* Start switched process. */
+	// load()가 성공적으로 끝난 뒤에는 바로 해당 프로세스를 실행하도록 리턴하는 것으로, process_exec()도 끝난다.
 	do_iret (&_if);
 	NOT_REACHED ();
 }
@@ -330,12 +332,20 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Allocate and activate page directory. */
+	// 각 프로세스가 실행이 될 때, 각 프로세스에 해당하는 VM(virtual memory)이 만들어져야 하므로,
+	// 이를 위해 페이지 테이블 엔트리를 생성하는 과정이 우선된다.
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
 
 	/* Open executable file. */
+	// 문제는, 만약 입력으로 들어오는 명령이 argument를 포함하고 있다면,
+	// load()의 코드에서 filename이 이제 진정한 파일의 이름이 아닐 수 있다는 점이다.
+	// 따라서, 순수한 실행 파일의 이름을 얻어내기 위해서, 파싱 자체는 load() 함수의 시작 즈음에 이루어져야 한다.
+	// 파싱을 위해서 manual에서는 strtok_r() 함수를 사용할 것을 권장하기에, 이를 사용한다.
+	// 또한, 대대적 개편 이후 pintOS는 x86이 아닌, x86-64 방식을 채택하게 되었다.
+	// 따라서, pintOS에서 포인터 변수의 크기가 8 bytes 씩이다.
 	file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
@@ -379,6 +389,13 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_SHLIB:
 				goto done;
 			case PT_LOAD:
+			// 그 뒤, 파일을 실제로 VM에 올리는 과정이 진행된다.
+			// 파일이 제대로 된 ELF인지 검사하는 과정이 동반되며,
+			// 세그먼트 단위로 PT_LOAD의 헤더 타입을 가진 부분을 하나씩 메모리로 올리는 작업을 진행한다.
+			// 리눅스 기반 시스템의 기본 바이너리 형식인 ELF(Executable and Linkable Format)을 말한다.
+			//ELF binaries: 리눅스에서 실행 가능(Executable)하고 링크 가능(Linkable)한 File의 Format을 ELF라고 한다. 
+			// 즉, 실행 가능한 바이너리 또는 오브젝트 파일 등의 형식을 규정한 것이다.
+			// https://pu1et-panggg.tistory.com/32
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
@@ -408,19 +425,25 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
+	// 전부 메모리로 올린 뒤에 스택을 만드는 과정이 실행된다.
 	if (!setup_stack (if_))
 		goto done;
 
 	/* Start address. */
+	// 어떤 명령부터 실행되는지를 가리키는, 즉, entry point 역할의 rip를 설정하고,
 	if_->rip = ehdr.e_entry;
 
+	// 일단 스택이 만들어진 다음에 스택의 내용물을 채워넣어야 하기 때문에, 
+	// 우리가 구현할 부분은 setup_stack() 이후에 들어간다.
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
+  // 파일을 성공적으로 load() 했음을 나타내기 위해 success = true;를 설정한다.
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
+	// 열었던 실행 파일을 닫는 것으로 load()가 끝난다.
 	file_close (file);
 	return success;
 }

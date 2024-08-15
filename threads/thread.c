@@ -499,6 +499,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// 새롭게 추가한 요소를 초기화 하는 과정
 	t->nice = NICE_DEFAULT;
   t->recent_cpu = RECENT_CPU_DEFAULT;
+
+/* ********** ********** ********** project 2 : system call ********** ********** ********** */
+#ifdef USERPROG
+	t->exit_status = 0;
+
+#endif
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

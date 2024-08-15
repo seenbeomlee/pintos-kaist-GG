@@ -22,13 +22,16 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			"mov %5, %%r10\n"
 			"mov %6, %%r8\n"
 			"mov %7, %%r9\n"
-			"syscall\n"
+			"syscall\n" // 어셈블리어를 통해 제어가 커널로 넘어가게 된다. -> userprog/syscall.c에 구현한 syscall_handler is called.
 			: "=a" (ret)
 			: "g" (num), "g" (a1), "g" (a2), "g" (a3), "g" (a4), "g" (a5), "g" (a6)
 			: "cc", "memory");
 	return ret;
 }
 
+/** syscall 뒤의 숫자는 인자의 개수를 의미한다.
+ * 즉, 인자가 하나인 syscall을 의미하는 것은 syscall1 이다.
+ */
 /* Invokes syscall NUMBER, passing no arguments, and returns the
    return value as an `int'. */
 #define syscall0(NUMBER) ( \
@@ -68,6 +71,12 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			((uint64_t) ARG3), \
 			((uint64_t) ARG4), \
 			0))
+
+/** 이하의 코드는
+ * pintos-kaist/include/lib/user
+ * 에 구현된 다른 내용의 system call을 의미한다.
+ * 즉, project2에서 추가할 코드는 userprog/syscall.c 와 include/userprog/syscall.h에 따로 구현해야 한다.
+ */
 void
 halt (void) {
 	syscall0 (SYS_HALT);

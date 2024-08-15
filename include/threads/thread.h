@@ -9,7 +9,6 @@
 #include "vm/vm.h"
 #endif
 
-
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
@@ -112,6 +111,9 @@ struct thread /* TCB 영역의 구성 */
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+/* ********** ********** ********** project 2 : system call ********** ********** ********** */
+    // exit(), wait() 구현 때 사용될 exit_status를 추가하고 초기화 한다.
+    int exit_status;
 
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
     struct file *runn_file;  // 실행중인 파일

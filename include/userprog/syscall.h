@@ -44,28 +44,62 @@ void exit (int status);
 pid_t fork (const char *thread_name);
 int exec (const char *file);
 int wait (pid_t pid);
-/**
+
+/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
+/** create(const char *file, unsigned int initial_size)
  * 파일을 생성하는 시스템 콜
- * 성공할 경우, true
- * 실패할 경우, false를 return한다.
+ * 파일 생성에 성공할 경우, true
+ * 파일 생성에 실패할 경우, false를 return한다.
  * file : 생성할 파일의 이름 및 경로 정보
  * initial_size : 생성할 파일의 크기를 말한다.
+ * filesys_create 함수를 통해 구현할 수 있다.
  */
-bool
 bool create (const char *file, unsigned initial_size);
-/**
+/** remove(const char *file)
+ * remove(const char *file)
  * 파일을 삭제하는 시스템 콜
  * 성공할 경우, true
  * 실패할 경우, false를 return한다.
  * file : 제거할 파일의 이름 및 경로 정보
+ * filesys_remove 함수를 통해 구현할 수 있다.
  */
 bool remove (const char *file);
+/** open(const char *file)
+ * 
+ * filesys_open 함수를 통해 구현할 수 있다.
+ */
 int open (const char *file);
+/** filesize(int fd)
+ * 
+ * file_length 함수를 통해 쉽게 구현할 수 있다.
+ */
 int filesize (int fd);
+/** read(int fd, void *buffer, unsigned int size)
+ * 
+ * standard input에서 값을 읽어오는 경우 input_getc 함수를 통해 구현할 수 있고, 
+ * 다른 파일을 열어서 읽는 경우 file_read 함수를 통해 구현할 수 있다.
+ */
 int read (int fd, void *buffer, unsigned size);
+/** write(int fd, void *buffer, unsigned int size)
+ * 
+ * standard output에 값을 쓰는 경우 putbuf를 통해 구현할 수 있으며, 
+ * 다른 파일에 값을 쓰는 경우에는 file_write 함수를 통해 구현할 수 있다.
+ */
 int write (int fd, const void *buffer, unsigned size);
+/** seek(int fd, unsigned int position)
+ * 
+ * file_seek 함수를 통해 구현할 수 있다.
+ */
 void seek (int fd, unsigned position);
+/** tell(int fd)
+ * 
+ * file_tell 함수를 통해 구현할 수 있다.
+ */
 unsigned tell (int fd);
+/** close(int fd)
+ * 
+ * file_close를 통해 구현할 수 있다.
+ */
 void close (int fd);
 
 /**

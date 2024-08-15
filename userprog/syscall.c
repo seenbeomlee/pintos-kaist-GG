@@ -143,6 +143,7 @@ int
 wait (pid_t pid) {
 }
 
+bool
 create (const char *file, unsigned initial_size) {
 	check_address(file);
 	return filesys_create(file, initial_size);

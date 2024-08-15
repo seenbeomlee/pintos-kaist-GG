@@ -32,6 +32,15 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
+/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
+#define FDT_PAGES 3 // test for 'multi-oom'
+/**
+ * 엔트리는 1 << 9 == 2의 9승으로 인해 512개가 된다.
+ * 페이지 크기는 4kb이고(2의 12승)), 파일 포인터가 8byte(2의 3승)이기 때문이다.
+ * 따라서, 2의 12승 / 2의 3승 == 2의 9승 만큼의 페이지 크기가 된다.
+ */
+#define FDCOUNT_LIMIT FDT_PAGES * (1 << 9) 
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -138,11 +147,11 @@ struct thread /* TCB 영역의 구성 */
      * 모든 프로세스가 공유한다.
     */
     int fd_idx; // 파일 디스크립터 인덱스
-    struct file **fdt; 파일 // 디스크립터 테이블
+    struct file **fdt; // 파일 디스크립터 테이블
     /** 파일 테이블은 struct file *fdt[128]과 같이 포인터 배열 형태로 선언하면 struct thread의 크기가 너무 커진다.
      * 이를 방지하기 위해 thread에는 파일 테이블의 시작 주소만 가지고 있게끔 **fdt 형태로 선언해주고,
      * thread가 생성될 때 파일 테이블을 동적으로 할당받게끔 한다. by (palloc)
-      */
+    */
 
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
     struct file *runn_file;  // 실행중인 파일

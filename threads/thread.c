@@ -220,6 +220,28 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
+#ifdef USERPROG
+	t->fdt = palloc_get_multiple (PAL_ZERO, FDT_PAGES);
+	if (t == NULL) {
+		return TID_ERROR;
+	}
+
+	/** 변수를 초기화하는 과정
+	 * 	프로세스에서 소켓을 열거나, 파일을 열 때 할당되는 파일 디스크립터는 항상 3부터 시작한다. 0, 1, 2는 시스템 상 먼저 예약되어 있기 때문이다.
+	 *	 0 == standard input
+	 *	 1 == standard output
+	 * 	2 == standard error
+	*/
+	t->exit_status = 0;
+
+	t->fd_idx = 3;
+	t->fdt[0] = 0; // stdin 예약된 자리 (dummy)
+	t->fdt[1] = 1; // stout 예약된 자리 (dummy)
+	t->fdt[2] = 2; // stderr 예약된 자리 (dummy)
+
+#endif
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;

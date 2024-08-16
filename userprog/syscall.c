@@ -163,7 +163,7 @@ exec (const char *cmd_line) {
 
 	memcpy(cmd_copy, cmd_line, size);
 
-	if(process_exec(cmd_copy) == -1)
+	if (process_exec(cmd_copy) == -1)
 		return -1;
 
 	return 0; // process_exec 성공시 return 값 없다. (do_iret)

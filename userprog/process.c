@@ -196,17 +196,36 @@ __do_fork (void *aux) {
 	if (parent->fd_idx >= FDCOUNT_LIMIT)
 		goto error;
 
-  // fdt 및 idx 복제
-	current->fd_idx = parent->fd_idx;
-	for (int fd = 3; fd < parent->fd_idx; fd++) {
-		if (parent->fdt[fd] == NULL)
+/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
+	struct file *file;
+
+	for (int fd = 0; fd < FDCOUNT_LIMIT; fd++) {
+		file = parent->fdt[fd];
+		if (file == NULL)
 			continue;
-		current->fdt[fd] = file_duplicate(parent->fdt[fd]);
+
+		if (file > STDERR)
+			current->fdt[fd] = file_duplicate(file);
+		else
+			current->fdt[fd] = file;
 	}
 
-	sema_up(&current->fork_sema); // fork 프로세스가 정상적으로 완료되었을 경우, 현재 fork용 sema를 unblock 한다.
+	current->fd_idx = parent->fd_idx;
+	sema_up(&current->fork_sema);  
 
-	process_init ();
+	process_init();
+
+  // // fdt 및 idx 복제
+	// current->fd_idx = parent->fd_idx;
+	// for (int fd = 3; fd < parent->fd_idx; fd++) {
+	// 	if (parent->fdt[fd] == NULL)
+	// 		continue;
+	// 	current->fdt[fd] = file_duplicate(parent->fdt[fd]);
+	// }
+
+	// sema_up(&current->fork_sema); // fork 프로세스가 정상적으로 완료되었을 경우, 현재 fork용 sema를 unblock 한다.
+
+	// process_init ();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
@@ -699,6 +718,22 @@ process_close_file(int fd)
 
     curr->fdt[fd] = NULL;
     return 0;
+}
+
+/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
+process_insert_file(int fd, struct file *f) {
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return -1;
+
+	if (f > STDERR)
+		f->dup_count++;
+
+	fdt[fd] = f;
+
+	return fd;
 }
 
 /* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */

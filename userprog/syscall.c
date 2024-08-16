@@ -122,6 +122,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_CLOSE:
 			close(f->R.rdi);
 			break;
+		case SYS_DUP2:
+			f->R.rax = dup2(f->R.rdi, f->R.rsi);
+			break;
 		default:
 			exit(-1);
 	}
@@ -213,17 +216,23 @@ filesize (int fd) {
 	return file_length(file);
 }
 
+/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
 int
 read (int fd, void *buffer, unsigned length) {
+	struct thread *curr = thread_current();
 	check_address(buffer);
 
+  struct file *file = process_get_file(fd); // 읽을 파일을 가져온다.
+
   // fd == 0(stdin)이라면, keyboard로 직접 입력한다.
-	if (fd == 0) {
+	// file == STDIN
+	if (file == STDIN) {
 		/**
 		 * char data-type은 단순한 8bits 정수형이지 문자를 저장하는 type이 아니다.
 		 * char형을 사용하는 이유는, ASCII가 7bits 형태의 체계를 따르고 있기 때문이다. 
 		 * 나머지 1bit는 통신 확인용 페리티 비트이다.
 		 */
+		int i = 0;
 		char c;
 		/**
 		 * signed char는 음수표시까지 가능하다. -128~127
@@ -231,21 +240,22 @@ read (int fd, void *buffer, unsigned length) {
 		 * 따라서, 주소값의 경우 음수가 존재하지 않고, 부호비트가 있을 경우 잘못된 데이터 전송이 일어날 수 있어, unsigned char를 사용한다.
 		 */
 		unsigned char *buf = buffer; // stdin으로 들어온 문자열에서 음수는 없을 것이다?
-		for(int i = 0; i < length; i++) {
+		for(; i < length; i++) {
 			c = input_getc();
 			*buf++ = c;
-			if (c == '/0') 
+			if (c == '\0') 
 				break;
 		}
+		return i;
 	}
-	// fd == 0도 아닌데, fd < 3인 경우, read한 값을 저장할 곳이 없다. 잘못된 fd가 입력되었다.
-	else if(fd < 3) 
+	// // 빈 파일, stdout, stderr를 읽으려고 할 경우
+	else if(fd == NULL || file == STDOUT || file == STDERR) 
 		return -1;
 	else {
-		struct file *file = process_get_file(fd); // 읽을 파일을 가져온다.
+		//struct file *file = process_get_file(fd); // 읽을 파일을 가져온다.
 
-		if(file == NULL) // 읽을 파일을 가져오는 것에 실패했을 경우 
-			return -1;
+		// if(file == NULL) // 읽을 파일을 가져오는 것에 실패했을 경우 
+		// 	return -1;
 
 		off_t bytes = -1;
 
@@ -261,19 +271,22 @@ int
 write (int fd, const void *buffer, unsigned length) {
 	check_address(buffer);
 
+  struct thread *curr = thread_current();
 	off_t bytes = -1;
 
-	if(fd <= 0) // stdin에 쓰라고 할 경우 or fd < 0인 음수일 경우
+	struct file *file = process_get_file(fd); // 쓸 파일을 가져온다.
+
+	if(file == STDIN || file == NULL) // stdin에 쓰라고 할 경우 or 쓸 파일이 없는 경우
 		return -1;
-	else if(fd < 3) { // 1(stdout), 2(stderr) 모두 console로 출력한다.
+	else if(file == STDOUT || file == STDERR) { // 1(stdout), 2(stderr) 모두 console로 출력한다.
 		putbuf(buffer, length);
 		return length;
 	}
 	else {
-		struct file *file = process_get_file(fd); // 쓸 파일을 가져온다.
+		// struct file *file = process_get_file(fd); // 쓸 파일을 가져온다.
 
-		if (file == NULL) // 쓸 내용이 없을 경우
-			return -1;
+		// if (file == NULL) // 쓸 내용이 없을 경우
+		// 	return -1;
 
 		lock_acquire(&filesys_lock);
 		bytes = file_write(file, buffer, length);
@@ -307,21 +320,62 @@ tell (int fd) {
 
 void
 close (int fd) {
-	if(fd < 3) return;
+	struct thread *curr = thread_current();
+  struct file *file = process_get_file(fd);
 
-	struct file *file = process_get_file(fd);
-	if(file == NULL)
+	if (file == NULL)
 		return;
-	else {
-		process_close_file(fd);
-		file_close(file);
+
+	process_close_file(fd);
+
+	if (file == STDIN || file == STDOUT || file == STDERR) {
+		file = 0;
+		return;
 	}
-		
+	else if (file->dup_count == 0)
+		file_close(file);
+	else
+		file->dup_count--;
+
+	// if(fd < 3) return;
+
+	// struct file *file = process_get_file(fd);
+	// if(file == NULL)
+	// 	return;
+	// else {
+	// 	process_close_file(fd);
+	// 	file_close(file);
+	// }
 }
 
 void 
-check_address (void *addr)
-{
+check_address (void *addr) {
     if (is_kernel_vaddr(addr) || addr == NULL || pml4_get_page(thread_current()->pml4, addr) == NULL)
         exit(-1);
+}
+
+/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
+int
+dup2(int oldfd, int newfd) {
+	if (oldfd < 0 || newfd < 0)
+		return -1;
+
+	struct file *oldfile = process_get_file(oldfd);
+
+	if (oldfile == NULL)
+		return -1;
+
+	if (oldfd == newfd)
+		return newfd;
+
+	struct file *newfile = process_get_file(newfd);
+
+	if (oldfile == newfile) 
+		return newfd;
+
+	close(newfd);
+
+	newfd = process_insert_file(newfd, oldfile);
+
+	return newfd;
 }

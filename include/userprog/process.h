@@ -3,6 +3,11 @@
 
 #include "threads/thread.h"
 
+/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
+#define STDIN 1
+#define STDOUT 2
+#define STDERR 3
+
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);
 int process_exec (void *f_name);
@@ -20,5 +25,8 @@ int process_close_file(int fd);
 
 /* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 struct thread *get_child_process(int pid);
+
+/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
+process_insert_file(int fd, struct file *f);
 
 #endif /* userprog/process.h */

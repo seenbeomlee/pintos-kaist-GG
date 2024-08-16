@@ -145,4 +145,22 @@ void close (int fd);
  */
 void check_address (void *addr);
 
+/**
+ * dup2() 시스템 콜은 인자로 받은 oldfd 파일 디스크립터의 복사본을 생성하고,
+ * 이 복사본의 파일디스크립터 값은 인자로 받은 newfd 값이 되게 한다.
+ * dup2() 시스템 콜이 파일 디스크립터를 복사해서 새 파일 디스크립터를 생성하는 데 성공한다면 newfd를 return 한다.
+ * 만약, newfd 값이 이전에 이미 열려있었다면, newfd는 재사용되기 전에 조용히 닫힌다.
+ * 만약, oldfd가 유효한 파일 디스크립터가 아니라면, dup2() 콜은 실패하여 1을 return 하고, newfd는 닫히지 않는다.
+ * 만약, oldfd가 유효한 파일 디스크립터이고, newfd는 oldfd와 같은 값을 가지고 있다면 dup2()가 할일은 따로 없고, newfd 값을 return 한다.
+ * 이 시스템콜로부터 성공적으로 값을 반환받은 후에, oldfd와 newfd는 호환해서 사용이 가능하다.
+ * 이 둘은 서로 다른 파일 디스크립터이긴하지만, 똑같은 열린 파일 디스크립터를 의미하기 때문에, 같은 file offset과 status flags를 공유하고 있다.
+ * 예를 들어, 만약에 다른 디스크립터가 seek을 사용해서 file offset이 수정되었다면, 다른 스크립터에서도 이 값은 똑같이 수정된다.
+ * 
+ * 과제의 목표는 다음과 같다.
+ * 1.stdin에 대한 fd를 닫아주면, 그 어떤 input도 읽어들이지 않는다.
+ * 2.stdout에 대한 fd를 닫아주면, 그 어떤 output도 process에 의해 출력되지 않는다.
+ * dup2를 구현해 주어진 stdin/stdout/file에 대한 fd를 fd_table 내에 복사해준다.
+ */
+int dup2(int oldfd, int newfd);
+
 #endif /* userprog/syscall.h */

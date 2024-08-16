@@ -42,7 +42,15 @@ void exit (int status);
 // 왜냐하면, 단순히 부모 프로세스에 접근해 parent->tf와 같은 방식으로 부모의 interrupt frame을 가져오면,
 // kernel context의 interrupt frame을 가져오게 된다.
 pid_t fork (const char *thread_name);
-int exec (const char *file);
+
+/**
+ * 
+ */
+int exec (const char *cmd_line);
+
+/**
+ * 
+ */
 int wait (pid_t pid);
 
 /* ********** ********** ********** project 2 : File I/O ********** ********** ********** */

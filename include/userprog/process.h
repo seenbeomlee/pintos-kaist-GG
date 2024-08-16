@@ -18,4 +18,7 @@ int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
 int process_close_file(int fd);
 
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+struct thread *get_child_process(int pid);
+
 #endif /* userprog/process.h */

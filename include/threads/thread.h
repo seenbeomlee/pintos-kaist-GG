@@ -5,9 +5,13 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
+
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+#define USERPROG
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -120,10 +124,14 @@ struct thread /* TCB 영역의 구성 */
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+    struct file *runn_file;  // 실행중인 파일
+
 /* ********** ********** ********** project 2 : system call ********** ********** ********** */
     // exit(), wait() 구현 때 사용될 exit_status를 추가하고 초기화 한다.
     int exit_status;
 
+/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
     /** File Descriptor 
      * 유닉스 시스템에서는 많은 것들을 파일로 관리한다.
      * 정규 파일들뿐만 아니라 디렉터리, 소켓, 기타 입출력 장치들 모두 파일의 형태로 취급하는데,
@@ -153,8 +161,14 @@ struct thread /* TCB 영역의 구성 */
      * thread가 생성될 때 파일 테이블을 동적으로 할당받게끔 한다. by (palloc)
     */
 
-/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
-    struct file *runn_file;  // 실행중인 파일
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+    struct intr_frame parent_if; // parent process의 if
+    struct list child_list;
+    struct list_elem child_elem;
+
+    struct semaphore fork_sema; // fork가 완료될 때 signal
+    struct semaphore exit_sema; // child process 종료 signal
+    struct semaphore wait_sema; // exit_sema를 기다릴 때 사용한다.
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

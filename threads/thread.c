@@ -236,10 +236,14 @@ thread_create (const char *name, int priority,
 	t->exit_status = 0;
 
 	t->fd_idx = 3;
+	/** struct file **fdt 여서, file *fdt가 들어가야 하나, dummy값 이기에 int를 넣어 warning 발생. 
+	 * file* 값이 */
 	t->fdt[0] = 0; // stdin 예약된 자리 (dummy)
 	t->fdt[1] = 1; // stout 예약된 자리 (dummy)
 	t->fdt[2] = 2; // stderr 예약된 자리 (dummy)
 
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+	list_push_back(&thread_current()->child_list, &t->child_elem);
 #endif
 
 	/* Call the kernel_thread if it scheduled.
@@ -523,10 +527,15 @@ init_thread (struct thread *t, const char *name, int priority) {
   t->recent_cpu = RECENT_CPU_DEFAULT;
 
 /* ********** ********** ********** project 2 : system call ********** ********** ********** */
-#ifdef USERPROG
-	t->exit_status = 0;
+	// t->exit_status = 0;
 
-#endif
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+	t->runn_file = NULL;
+
+	list_init(&t->child_list);
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->exit_sema, 0);
+	sema_init(&t->wait_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

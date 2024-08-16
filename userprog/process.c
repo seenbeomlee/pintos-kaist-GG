@@ -84,16 +84,35 @@ initd (void *f_name) {
 	NOT_REACHED ();
 }
 
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *curr = thread_current();
+
+	struct intr_frame *f = (pg_round_up(rrsp()) - sizeof(struct intr_frame)); // 현재 thread의 if_는 페이지 마지막에 붙어있다.
+  memcpy(&curr->parent_if, f, sizeof(struct intr_frame)); // 1.부모를 찾기 위해서, 2. do_fork()에 전달하기 위해서
+	// 현재 thread를 새 thread로 복제한다.
+	tid_t tid = thread_create (name,
+			PRI_DEFAULT, __do_fork, curr);
+
+	if(tid == TID_ERROR)
+		return TID_ERROR;
+	
+	struct thread *child = get_child_process(tid);
+
+	sema_down(&child->fork_sema); // 생성만 해놓고, 자식 프로세스가 __do_fork()에서 fork_sema를 sema_up 할 때까지 대기한다.
+
+	if(child->exit_status == TID_ERROR)
+		return TID_ERROR;
+
+		return tid; // parent process의 return value == 생성한 자식 process의 tid가 되어야 한다.
 }
 
 #ifndef VM
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
 static bool
@@ -105,26 +124,37 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if (is_kernel_vaddr(va))
+		return true;
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	if (parent_page == NULL)
+		return false;
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_ZERO);
+	if (newpage == NULL)
+		return false;
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
 #endif
 
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 /* A thread function that copies parent's execution context.
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
@@ -135,11 +165,12 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	if_.R.rax = 0;  // 자식 프로세스의 return값 (0)
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -162,13 +193,29 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+	if (parent->fd_idx >= FDCOUNT_LIMIT)
+		goto error;
+
+  // fdt 및 idx 복제
+	current->fd_idx = parent->fd_idx;
+	for (int fd = 3; fd < parent->fd_idx; fd++) {
+		if (parent->fdt[fd] == NULL)
+			continue;
+		current->fdt[fd] = file_duplicate(parent->fdt[fd]);
+	}
+
+	sema_up(&current->fork_sema); // fork 프로세스가 정상적으로 완료되었을 경우, 현재 fork용 sema를 unblock 한다.
+
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_);
+		do_iret (&if_); // 정상적으로 종료시, 자식 process를 수행하러 간다.
+
 error:
-	thread_exit ();
+	// thread_exit ();
+	sema_up(&current->fork_sema);
+	exit(TID_ERROR);
 }
 
 /* Switch the current execution context to the f_name.
@@ -191,8 +238,13 @@ process_exec (void *f_name) {
 
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
 	char *ptr, *arg;
-  int arg_cnt = 0;
-  char *arg_list[32];
+  int argc = 0;
+	char *argv[64];
+  // char *arg_list[32];
+
+	/**
+	 * 나중에 argument parsing 부분 token 형식으로 수정해볼 것
+	 */
   // char *ptr == char *save_ptr
 	// char *arg == char *token
 	// int arg_cht == int argc
@@ -205,21 +257,20 @@ process_exec (void *f_name) {
 	// 또한, 대대적 개편 이후 pintOS는 x86이 아닌, x86-64 방식을 채택하게 되었다.
 	// 따라서, pintOS에서 포인터 변수의 크기가 8 bytes 씩이다.
 	for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr))
-  arg_list[arg_cnt++] = arg;
+ 		argv[argc++] = arg;
 
 	/* And then load the binary */
 	// load() 함수는 실행할 프로그램의 binary 파일을 메모리에 올리는 역할을 한다.
 	// file_name == 사용자가 커맨드 라인에 적은 f_name을 받은 변수이다.
 	// _if == 인터럽트 프레임 구조체이다.
 	success = load (file_name, &_if);
-
-/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
-	argument_stack(arg_list, arg_cnt, &_if);
-
-	/* If load failed, quit. */
-	palloc_free_page (file_name);
 	if (!success)
 		return -1;
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+	argument_stack(argv, argc, &_if);
+	/* If load failed, quit. */
+	palloc_free_page (file_name);
 
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
 /* ********** ********** ********** for test ********** ********** ********** */
@@ -255,7 +306,19 @@ process_wait (tid_t child_tid UNUSED) {
 // 핀토스는 유저 프로세스를 생성한 후 프로세스 종료를 대기해야 하는데 자식 프로세스가 종료될 때까지 일정시간 대기한다.
 // for (int i = 0; i < 1000000000; i++) {}
 	
-	return -1;
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+	struct thread *child = get_child_process(child_tid);
+	if (child == NULL)
+		return -1;
+
+	sema_down(&child->wait_sema);
+
+	int exit_status = child->exit_status;
+	list_remove(&child->child_elem);
+
+	sema_up(&child->exit_sema);
+
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -636,6 +699,26 @@ process_close_file(int fd)
 
     curr->fdt[fd] = NULL;
     return 0;
+}
+
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+/** 
+ * 현재 프로세스의 자식 리스트를 검색하여 해당 pid에 맞는 프로세스 디스크립터를 반환한다.
+ * pid를 갖는 프로세스 디스크립터가 존재하지 않을 경우 NULL을 반환한다.
+ */
+struct thread 
+*get_child_process(int pid) {
+	struct thread *curr = thread_current();
+	struct thread *child;
+
+    for (struct list_elem *e = list_begin(&curr->child_list); e != list_end(&curr->child_list); e = list_next(e)) {
+			child = list_entry(e, struct thread, child_elem);
+
+		if(pid == child->tid)
+			return child;
+	}
+
+	return NULL;
 }
 
 #ifndef VM

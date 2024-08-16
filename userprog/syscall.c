@@ -8,6 +8,13 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+#include "threads/mmu.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "threads/palloc.h"
+#include "userprog/process.h"
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
@@ -64,8 +71,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	 */
 
   int syscall_number = f->R.rax;
-	switch (syscall_number)
-	{
+	switch (syscall_number) {
 		// Argument 순서는 다음과 같다.
 		// %rdi %rsi %rdx %r10 %r8 %r9
 		case SYS_HALT:
@@ -119,9 +125,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		default:
 			exit(-1);
 	}
-
-	printf ("system call!\n");
-	thread_exit ();
+	// printf ("system call!\n");
+	// thread_exit ();
 }
 
 /* ********** ********** ********** project 2 : system call ********** ********** ********** */
@@ -138,18 +143,38 @@ exit (int status) {
 	thread_exit();
 }
 
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 pid_t
-fork (const char *thread_name){
+fork (const char *thread_name) {
+	check_address(thread_name);
+
+	return process_fork(thread_name, NULL);
 }
 
 int
-exec (const char *file) {
+exec (const char *cmd_line) {
+	check_address(cmd_line);
+
+	off_t size = strlen(cmd_line) + 1;
+	char *cmd_copy = palloc_get_page(PAL_ZERO);
+
+	if (cmd_copy == NULL)
+		return -1;
+
+	memcpy(cmd_copy, cmd_line, size);
+
+	if(process_exec(cmd_copy) == -1)
+		return -1;
+
+	return 0; // process_exec 성공시 return 값 없다. (do_iret)
 }
 
 int
 wait (pid_t pid) {
+	return process_wait(pid);
 }
-
+/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
+ 
 bool
 create (const char *file, unsigned initial_size) {
 	check_address(file);
@@ -226,7 +251,7 @@ read (int fd, void *buffer, unsigned length) {
 
 		lock_acquire(&filesys_lock);
 		bytes = file_read(file, buffer, length);
-		lock_realese(&filesys_lock);
+		lock_release(&filesys_lock);
 
 		return bytes;
 	}
@@ -252,7 +277,7 @@ write (int fd, const void *buffer, unsigned length) {
 
 		lock_acquire(&filesys_lock);
 		bytes = file_write(file, buffer, length);
-		lock_realese(&filesys_lock);
+		lock_release(&filesys_lock);
 
 		return bytes;
 	}

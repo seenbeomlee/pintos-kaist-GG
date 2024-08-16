@@ -55,6 +55,7 @@ int wait (pid_t pid);
  * filesys_create 함수를 통해 구현할 수 있다.
  */
 bool create (const char *file, unsigned initial_size);
+
 /** remove(const char *file)
  * remove(const char *file)
  * 파일을 삭제하는 시스템 콜
@@ -64,38 +65,66 @@ bool create (const char *file, unsigned initial_size);
  * filesys_remove 함수를 통해 구현할 수 있다.
  */
 bool remove (const char *file);
+
 /** open(const char *file)
- * 
+ * 파일을 열 떄 사용하는 시스템 콜이다.
+ * 파일이 없을 경우 실패하고, -1을 return 한다.
+ * 파일을 여는데 성공했을 경우, fd를 생성하고, fd를 return 한다.
+ * file == 파일의 이름 및 경로 정보
  * filesys_open 함수를 통해 구현할 수 있다.
  */
 int open (const char *file);
+
 /** filesize(int fd)
- * 
+ * 파일의 크기를 알려주는 시스템 콜이다.
+ * 성공시 파일의 크기를 return 한다.
+ * 실패시 -1을 return 한다.
  * file_length 함수를 통해 쉽게 구현할 수 있다.
  */
 int filesize (int fd);
+
 /** read(int fd, void *buffer, unsigned int size)
- * 
+ * 열린 파일의 데이터를 읽는 시스템 콜
  * standard input에서 값을 읽어오는 경우 input_getc 함수를 통해 구현할 수 있고, 
  * 다른 파일을 열어서 읽는 경우 file_read 함수를 통해 구현할 수 있다.
+ * 성공시 읽은 바이트 수를 return,
+ * 실패시 -1을 return 한다.
+ * buffer : 읽은 데이터를 저장할 버퍼의 주소 값
+ * size : 읽을 데이터 크기
+ * fd 값이 0일 때, 키보드(standard input)의 데이터를 읽어 버퍼에 저장한다. (input_getc()를 이용)
  */
-int read (int fd, void *buffer, unsigned size);
+int read (int fd, void *buffer, unsigned length);
+
 /** write(int fd, void *buffer, unsigned int size)
  * 
+ * 열린 파일의 데이터를 기록하는 시스템 콜이다.
+ * 성공시 기록한 data의 bytes 수를 return 한다.
+ * 실패시 -1을 return 한다.
+ * buffer : 기록할 데이터를 저장한 버퍼의 주소 값이다.
+ * length : 기록할 데이터의 크기이다.
  * standard output에 값을 쓰는 경우 putbuf를 통해 구현할 수 있으며, 
  * 다른 파일에 값을 쓰는 경우에는 file_write 함수를 통해 구현할 수 있다.
- */
-int write (int fd, const void *buffer, unsigned size);
-/** seek(int fd, unsigned int position)
  * 
+ * fd == 1(stdout)일 때는, 요구에 따라서 버퍼에 저장된 데이터를 화면에 출력한다.
+ * 이는 putbuf()를 이용한다.
+ */
+int write (int fd, const void *buffer, unsigned length);
+
+/** seek(int fd, unsigned int position)
+ * 열린 파일의 위치(offset)를 이동하는 시스템 콜이다.
+ * position == 현재 위치(offset)를 기준으로 이동할 거리를 의미한다.
  * file_seek 함수를 통해 구현할 수 있다.
  */
 void seek (int fd, unsigned position);
+
 /** tell(int fd)
- * 
+ * 열린 파일의 위치(offset)를 알려주는 시스템 콜이다.
+ * 성공시 파일의 위치(offset)를 return 한다.
+ * 실패시 -1을 return 한다.
  * file_tell 함수를 통해 구현할 수 있다.
  */
 unsigned tell (int fd);
+
 /** close(int fd)
  * 
  * file_close를 통해 구현할 수 있다.

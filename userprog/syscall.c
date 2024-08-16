@@ -24,6 +24,9 @@ void syscall_handler (struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+/* ********** ********** ********** project 2 : FILE I/O ********** ********** ********** */
+struct lock filesys_lock; // 파일 읽기/쓰기용 lock 변수를 global lock으로 설정한다.
+
 void
 syscall_init (void) {
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
@@ -35,6 +38,10 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+/* ********** ********** ********** project 2 : FILE I/O ********** ********** ********** */
+// 파일 읽기/쓰기용 global lock 초기화 
+	lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -157,31 +164,134 @@ remove (const char *file) {
 
 int
 open (const char *file) {
+	check_address(file);
+	struct file *newfile = filesys_open(file);
+	if (newfile == NULL) { // 파일을 불러오는데 실패할 경우, open system call은 -1을 반환한다.
+		return -1;
+	}
+
+	int fd = process_add_file(newfile);
+	if (fd == -1) {
+		file_close(newfile);
+	}
+
+	return fd;
 }
 
 int
 filesize (int fd) {
+	struct file *file = process_get_file(fd);
 
+	if (file == NULL)
+		return -1;
+
+	return file_length(file);
 }
 
 int
-read (int fd, void *buffer, unsigned size) {
+read (int fd, void *buffer, unsigned length) {
+	check_address(buffer);
+
+  // fd == 0(stdin)이라면, keyboard로 직접 입력한다.
+	if (fd == 0) {
+		/**
+		 * char data-type은 단순한 8bits 정수형이지 문자를 저장하는 type이 아니다.
+		 * char형을 사용하는 이유는, ASCII가 7bits 형태의 체계를 따르고 있기 때문이다. 
+		 * 나머지 1bit는 통신 확인용 페리티 비트이다.
+		 */
+		char c;
+		/**
+		 * signed char는 음수표시까지 가능하다. -128~127
+		 * unsigned char는 양수만 표시 가능하다. 0~255
+		 * 따라서, 주소값의 경우 음수가 존재하지 않고, 부호비트가 있을 경우 잘못된 데이터 전송이 일어날 수 있어, unsigned char를 사용한다.
+		 */
+		unsigned char *buf = buffer; // stdin으로 들어온 문자열에서 음수는 없을 것이다?
+		for(int i = 0; i < length; i++) {
+			c = input_getc();
+			*buf++ = c;
+			if (c == '/0') 
+				break;
+		}
+	}
+	// fd == 0도 아닌데, fd < 3인 경우, read한 값을 저장할 곳이 없다. 잘못된 fd가 입력되었다.
+	else if(fd < 3) 
+		return -1;
+	else {
+		struct file *file = process_get_file(fd); // 읽을 파일을 가져온다.
+
+		if(file == NULL) // 읽을 파일을 가져오는 것에 실패했을 경우 
+			return -1;
+
+		off_t bytes = -1;
+
+		lock_acquire(&filesys_lock);
+		bytes = file_read(file, buffer, length);
+		lock_realese(&filesys_lock);
+
+		return bytes;
+	}
 }
 
 int
-write (int fd, const void *buffer, unsigned size) {
+write (int fd, const void *buffer, unsigned length) {
+	check_address(buffer);
+
+	off_t bytes = -1;
+
+	if(fd <= 0) // stdin에 쓰라고 할 경우 or fd < 0인 음수일 경우
+		return -1;
+	else if(fd < 3) { // 1(stdout), 2(stderr) 모두 console로 출력한다.
+		putbuf(buffer, length);
+		return length;
+	}
+	else {
+		struct file *file = process_get_file(fd); // 쓸 파일을 가져온다.
+
+		if (file == NULL) // 쓸 내용이 없을 경우
+			return -1;
+
+		lock_acquire(&filesys_lock);
+		bytes = file_write(file, buffer, length);
+		lock_realese(&filesys_lock);
+
+		return bytes;
+	}
 }
 
 void
 seek (int fd, unsigned position) {
+	if(fd < 3) return;
+
+	struct file *file = process_get_file(fd);
+	if(file == NULL)
+		return;
+	else
+		file_seek(file, position);
 }
 
 unsigned
 tell (int fd) {
+	if(fd < 3) return;
+
+	struct file *file = process_get_file(fd);
+	if(file == NULL)
+		return;
+	else
+		return file_tell(file);
 }
 
 void
 close (int fd) {
+	if(fd < 3) return;
+
+	struct file *file = process_get_file(fd);
+	if(file == NULL)
+		return;
+	else {
+		process_close_file(fd);
+		file_close(file);
+	}
+		
 }
 
 void 

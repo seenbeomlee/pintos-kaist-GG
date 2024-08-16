@@ -18,6 +18,8 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -222,7 +224,7 @@ process_exec (void *f_name) {
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
 /* ********** ********** ********** for test ********** ********** ********** */
 // 이 함수는 메모리의 내용을 16진수 형식으로 출력해줘서 스택에 저장된 값들을 확인할 수 있다.
-  hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 0x47480000	
+//  hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 0x47480000	
 
 	/* Start switched process. */
 	// load()가 성공적으로 끝난 뒤에는 바로 해당 프로세스를 실행하도록 리턴하는 것으로, process_exec()도 끝난다.
@@ -251,7 +253,7 @@ process_wait (tid_t child_tid UNUSED) {
 /* ********** ********** ********** for test ********** ********** ********** */
 // 테스트를 위한 일시적인 루프
 // 핀토스는 유저 프로세스를 생성한 후 프로세스 종료를 대기해야 하는데 자식 프로세스가 종료될 때까지 일정시간 대기한다.
-    for (int i = 0; i < 1000000000; i++) {}
+// for (int i = 0; i < 1000000000; i++) {}
 	
 	return -1;
 }
@@ -265,7 +267,18 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
-	process_cleanup ();
+		for (int fd = 0; fd < curr->fd_idx; fd++)  // FDT 비우기
+			close(fd);
+
+    file_close(curr->runn_file);  // 현재 프로세스가 실행중인 파일 종료
+
+    palloc_free_multiple(curr->fdt, FDT_PAGES);
+
+    process_cleanup();
+
+    sema_up(&curr->wait_sema);  // 자식 프로세스가 종료될 때까지 대기하는 부모에게 signal
+
+    sema_down(&curr->exit_sema);  // 부모 프로세스가 종료될 떄까지 대기
 }
 
 /* Free the current process's resources. */
@@ -499,7 +512,6 @@ done:
 	return success;
 }
 
-
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
 static bool
@@ -542,6 +554,88 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 	/* It's okay. */
 	return true;
+}
+
+/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
+// 인자값을 스택에 올리는 함수이다.
+// argument_stack 함수는 char **argv로 받은 문자열 배열과 int argc로 받은 인자 개수를 처리한다.
+void argument_stack(char **argv, int argc, struct intr_frame *if_) {
+    char *arg_addr[100]; // char *agr_addr[100]은 문자열 주소를 저장하는 배열이다.
+    int argv_len;
+
+    // argv 배열을 역순으로 stack에 넣는다.
+		// 그리고 각 문자열의 길이에 1을 더한 만큼의 공간을 할당하여 문자열을 복사한다.
+    for (int i = argc - 1; i >= 0; i--) {
+        argv_len = strlen(argv[i]) + 1;
+        if_->rsp -= argv_len;
+        memcpy(if_->rsp, argv[i], argv_len);
+        arg_addr[i] = if_->rsp;
+    }
+
+    // stack을 8 byte로 정렬한다.
+    while (if_->rsp % 8)
+        *(uint8_t *)(--if_->rsp) = 0;
+
+    if_->rsp -= 8;
+    memset(if_->rsp, 0, sizeof(char *));
+
+    // arg_addr 배열의 주소를 stack에 넣는다.
+    for (int i = argc - 1; i >= 0; i--) {
+        if_->rsp -= 8;
+        memcpy(if_->rsp, &arg_addr[i], sizeof(char *));
+    }
+
+    // 이때, 마지막으로 NULL 포인터를 넣어 인자들의 끝을 표시한다.
+    if_->rsp = if_->rsp - 8;
+    memset(if_->rsp, 0, sizeof(void *));
+
+    // stack에는 인자의 개수가 RDI 레지스터에, 그리고 인자들의 주소가 RSI 레지스터에 저장된다.
+    if_->R.rdi = argc;
+    if_->R.rsi = if_->rsp + 8;
+}
+
+/* ********** ********** ********** project 2 : FILE I/O ********** ********** ********** */
+// 현재 thread fdt에 file을 추가한다.
+int 
+process_add_file(struct file *f) {
+ /** 여기서 왜 굳이 struct file **fdt = curr->fdt; 를 해주는지 모르겠음.
+	* 그냥 바로 curr->fdt 에다가 작업해주면 sync error가 생기나?
+	* 나중에 코드 수정해보기.
+  */
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt; // 굳이? 어차피 포인터로 참조하는데 왜?
+
+	if (curr->fd_idx >= FDCOUNT_LIMIT) {
+		return -1;
+	}
+	fdt[curr->fd_idx++] = f;
+
+	return curr->fd_idx - 1;
+}
+
+// 현재 thread의 fd번째 파일 정보 얻기
+struct file 
+*process_get_file(int fd) 
+{
+    struct thread *curr = thread_current();
+
+    if (fd < 0 || fd >= FDCOUNT_LIMIT)
+        return NULL;
+
+    return curr->fdt[fd];
+}
+
+// 현재 thread의 fdt에서 파일을 삭제한다.
+int 
+process_close_file(int fd) 
+{
+    struct thread *curr = thread_current();
+
+    if (fd < 0 || fd >= FDCOUNT_LIMIT)
+        return -1;
+
+    curr->fdt[fd] = NULL;
+    return 0;
 }
 
 #ifndef VM
@@ -643,45 +737,6 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-
-/* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
-// 인자값을 스택에 올리는 함수이다.
-// argument_stack 함수는 char **argv로 받은 문자열 배열과 int argc로 받은 인자 개수를 처리한다.
-void argument_stack(char **argv, int argc, struct intr_frame *if_) {
-    char *arg_addr[100]; // char *agr_addr[100]은 문자열 주소를 저장하는 배열이다.
-    int argv_len;
-
-    // argv 배열을 역순으로 stack에 넣는다.
-		// 그리고 각 문자열의 길이에 1을 더한 만큼의 공간을 할당하여 문자열을 복사한다.
-    for (int i = argc - 1; i >= 0; i--) {
-        argv_len = strlen(argv[i]) + 1;
-        if_->rsp -= argv_len;
-        memcpy(if_->rsp, argv[i], argv_len);
-        arg_addr[i] = if_->rsp;
-    }
-
-    // stack을 8 byte로 정렬한다.
-    while (if_->rsp % 8)
-        *(uint8_t *)(--if_->rsp) = 0;
-
-    if_->rsp -= 8;
-    memset(if_->rsp, 0, sizeof(char *));
-
-    // arg_addr 배열의 주소를 stack에 넣는다.
-    for (int i = argc - 1; i >= 0; i--) {
-        if_->rsp -= 8;
-        memcpy(if_->rsp, &arg_addr[i], sizeof(char *));
-    }
-
-    // 이때, 마지막으로 NULL 포인터를 넣어 인자들의 끝을 표시한다.
-    if_->rsp = if_->rsp - 8;
-    memset(if_->rsp, 0, sizeof(void *));
-
-    // stack에는 인자의 개수가 RDI 레지스터에, 그리고 인자들의 주소가 RSI 레지스터에 저장된다.
-    if_->R.rdi = argc;
-    if_->R.rsi = if_->rsp + 8;
-}
-
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the

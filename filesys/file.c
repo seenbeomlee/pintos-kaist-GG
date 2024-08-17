@@ -177,6 +177,7 @@ file_length (struct file *file) {
  * 파일의 offset을 position으로 바꿔주는 함수이다.
  * file_seek 함수를 통해 구현할 수 있다.
  * void 형태로 return 값이 없다.
+ * project4 이후에는, 파일의 끝을 넘어서 쓰기 작업을 수행할 수 있다.
  */
 void
 file_seek (struct file *file, off_t new_pos) {

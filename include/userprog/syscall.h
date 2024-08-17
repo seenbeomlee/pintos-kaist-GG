@@ -20,9 +20,12 @@ void halt (void);
 /** 
  * 현재 프로세스를 종료시키는 시스템 콜
  * 종료 시, '프로세스 이름 : exit(status)'를 출력한다. (Process Termination Message)
- * 정상적으로 종료 시, status == 0;
- */
+ * 만약, 부모 프로세스가 현재 유저 프로그램의 종료를 기다리던 중이라면,
+ * 그 말은 종료되면서 return될 그 상태를 기다린다는 것이다.
+ * 관례적으로 status == 0은 성공을 뜻하고, 0이 아닌 값들은 error를 의미한다.
+*/
 void exit (int status);
+
 /**  pid_t fork (const char *thread_name); 
  * https://codable.tistory.com/27
  * thread_name이라는 이름을 가진 현재 process의 복제본인 새 프로세스를 만든다.
@@ -33,7 +36,6 @@ void exit (int status);
  * 부모 프로세스는 자식 프로세스가 성공적으로 복제되었는지 여부를 알 때까지 fork에서 반환해서는 안 된다.
  * 즉, 자식 프로세스가 리소스를 복제하지 못하면 부모의 fork() 호출은 TID_ERROR를 반환한다.
 */
-
 // fork는 시스템 콜이므로, 유저 프로그램에서 fork를 호출하면, 먼저 syscall handler 함수로 진입하게 된다.
 // child와 parent 간의 context switching에 의해 부모 프로세스의 interrupt frame이 바뀌게 된다.
 // 이때, 부모의 interrupt frame에는 kernel의 context가 담겨있다.
@@ -44,18 +46,32 @@ void exit (int status);
 pid_t fork (const char *thread_name);
 
 /**
- * 
+ * 현재의 process가 cmd_line에서 이름이 주어지는 실행가능한 process로 변경된다.
+ * 이때, 주어진 인자들을 전달한다. 성공적으로 진행된다면 어떤 것도 반환하지 않는다.
+ * 만약, 프로그램이 프로세스를 로드하지 못하거나 다른 이유로 돌리지 못하게 되면 exit state -1을 반환하며, 프로세스가 종료된다.
+ * 이 함수는 exec 함수를 호출한 thread의 이름은 바꾸지 않는다.
+ * file descriptor는 exec 함수 호출 시에 열린 상태로 있다.
  */
 int exec (const char *cmd_line);
 
 /**
+ * 자식 프로세스(pid)를 기다려서, 자식의 종료 상태(exit status)를 가져온다.
+ * 만약 pid가 아직 살아있으면, 종료될 때까지 기다린다.
+ * 종료가 되면 그 프로세스가 exit 함수로 전달해준 상태(exit status)를 반환한다.
  * 
+ * 만약, pid(자식 프로세스)가 exit() 함수를 호출하지 않고, 커널에 의해서 종료된다면(e.g exception에 의해 죽는 경우)
+ * wait(pid)는 -1을 반환해야 한다.
+ * 
+ * 부모 process가 wait 함수를 호출한 시점에서, 이미 종료되어버린 자식 프로세스를 기다리도록 하는 것은 합당하지만,
+ * kernal은 부모 프로세스에게 자식의 종료 상태를 알려주던지, 커널에 의해 종료되었다는 사실을 알려주어야 한다.
+ * 자식들을 상속되지 않기 때문에, 한 프로세스는 어떤 주어진 자식에 대해서 최대 한번만 wait할 수 있다.
+ * => 따라서, wait는 어렵다..
  */
 int wait (pid_t pid);
 
 /* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
 /** create(const char *file, unsigned int initial_size)
- * 파일을 생성하는 시스템 콜
+ * 파일을 생성하는 시스템 콜 != 파일을 여는 시스템 콜(open)과 구분되어야 한다.
  * 파일 생성에 성공할 경우, true
  * 파일 생성에 실패할 경우, false를 return한다.
  * file : 생성할 파일의 이름 및 경로 정보
@@ -67,6 +83,8 @@ bool create (const char *file, unsigned initial_size);
 /** remove(const char *file)
  * remove(const char *file)
  * 파일을 삭제하는 시스템 콜
+ * 파일은 열려있는지, 닫혀있는지 여부와 관계없이 삭제될 수 있다.
+ * 다만, 파일을 삭제하는 것이 그 파일을 닫았다는 것을 의미하지는 않는다.
  * 성공할 경우, true
  * 실패할 경우, false를 return한다.
  * file : 제거할 파일의 이름 및 경로 정보
@@ -140,8 +158,11 @@ unsigned tell (int fd);
 void close (int fd);
 
 /**
- * 해당하는 주소 값이 유저 영역에서 사용하는 주소 값인지 확인한다.
- * 유저 영역을 벗어난 영역일 경우 프로세스를 종료시킨다.
+ * 1. null 포인터
+ * 2. 매핑되지 않은 가상 메모리를 카리키는 포인터
+ * 3. 커널 가상 주소 공간(KERN_BASE 이상)을 전달할 수 있으므로, 커널은 이를 매우 신중하게 처리해야 한다.
+ * 이러한 유형의 잘못된 포인터는 거부되어야 한다.
+ * 문제를 일으킨 프로세스를 종료하고, 그 자원을 해제해야 한다.
  */
 void check_address (void *addr);
 

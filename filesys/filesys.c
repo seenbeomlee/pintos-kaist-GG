@@ -85,7 +85,8 @@ filesys_create (const char *name, off_t initial_size) {
  * or if an internal memory allocation fails. */
 /** open(const char *file) 
  * 파라미터로 받은 file과 같은 이름을 가진 파일을 디스크에서 찾아 연다.
- * 파일을 정상적으로 열지 못한 경우에는 -1을 return 한다.
+ * 파일이 정상적으로 열린 경우, 해당 파일에 대한 구조체 포인터인 struct file *을 반환한다.
+ * 파일을 정상적으로 열지 못한 경우(파일을 찾지 못하거나, 내부 메모리 할당에 실패한 경우)에는 -1을 return 한다.
 */
 struct file *
 filesys_open (const char *name) {

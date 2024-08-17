@@ -87,6 +87,14 @@ initd (void *f_name) {
 /* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
+
+/** parent -> tf는 사용할 수 없다.
+ * fork를 하면 자식은 부모의 tf를 물려바아야 하는데, 지금은 fork()를 수행하면서 context switch가 일어난 상태로,
+ * 현재 부모의 tf에는 kernal이 작업하던 정보가 저장되어 있다.
+ * 자식에게 물려줘야 하는 tf는 kernal이 작업하던 정보가 아닌 user-level에서 부모 프로세스가 작업하던 정보를 물려주어야 한다.
+ * user-level에서의 부모 프로세스가 실행되던 정보는 시스템콜이 호출될 때 syscall-hander에 f로 들어온다.
+ * 따라서, f를 fork 함수에 전달해서 인자로 사용해야 한다.
+ */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
@@ -94,7 +102,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
 	struct intr_frame *f = (pg_round_up(rrsp()) - sizeof(struct intr_frame)); // 현재 thread의 if_는 페이지 마지막에 붙어있다.
   memcpy(&curr->parent_if, f, sizeof(struct intr_frame)); // 1.부모를 찾기 위해서, 2. do_fork()에 전달하기 위해서
-	// 현재 thread를 새 thread로 복제한다.
+	// 현재 thread를 새 thread로 복제한다. tid는 자식 프로세스의 pid가 된다.
 	tid_t tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, curr);
 
@@ -165,6 +173,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+	// process_fork()에서 전달한 부모 스레드의 parent_if 필드의 값을 parent_if에 할당한다.
 	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
@@ -197,8 +206,10 @@ __do_fork (void *aux) {
 		goto error;
 
 /* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
+// 파부모의 일 디스크립터 테이블의 파일을 자식에게도 복제한다.
 	struct file *file;
 
+// FDT 복제
 	for (int fd = 0; fd < FDCOUNT_LIMIT; fd++) {
 		file = parent->fdt[fd];
 		if (file == NULL)
@@ -209,9 +220,10 @@ __do_fork (void *aux) {
 		else
 			current->fdt[fd] = file;
 	}
-
+// fd_idx 복제
 	current->fd_idx = parent->fd_idx;
-	sema_up(&current->fork_sema);  
+// 부모는 fork_sema가 down된 상태에서 대기하고 있으므로, 자식이 fork_sema를 up 해주어야 한다.
+	sema_up(&current->fork_sema); 
 
 	process_init();
 
@@ -330,13 +342,17 @@ process_wait (tid_t child_tid UNUSED) {
 	if (child == NULL)
 		return -1;
 
+// 찾은 자식이 sema_up 해줄때까지(종료될 때까지) 대기한다.
 	sema_down(&child->wait_sema);
 
+// 자식에게서 종료 signal이 도착하면 자식 list에서 해당 자식을 제거한다.
 	int exit_status = child->exit_status;
 	list_remove(&child->child_elem);
 
+// 자식이 완전히 종료되어도 괜찮은지 대기하고 있으므로, 부모가 sema_up을 signal으로 보내 완전히 종료되게 해준다.
 	sema_up(&child->exit_sema);
 
+// 자식의 exit_status를 반환하고 함수를 종료한다.
 	return exit_status;
 }
 
@@ -495,7 +511,17 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
-	t->runn_file = file;
+/**
+ * 현재 thread의 실행중인 file을 저장하는 runn_file 필드이다.
+ * thread가 삭제될 때 파일을 닫을 수 있도록 구조체에 파일을 저장해준다.
+ */
+	t->runn_file = file; 
+/**
+ * 현재 실행중인 파일을 수정하는 일이 발생하면 안된다.
+ * 따라서, 실행중인 파일에 대한 쓰기 작업을 거부하는 코드를 추가한다.
+ * file_deny_write() 함수를 사용한다.
+ * 이 부분을 구현하면 rox(Read Only for eXecutable 관련 테스트들을 통과할 수 있다.)
+ */
 	file_deny_write(file);
 	
 	/* Read and verify executable header. */
@@ -677,27 +703,32 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) {
 }
 
 /* ********** ********** ********** project 2 : FILE I/O ********** ********** ********** */
-// 현재 thread fdt에 file을 추가한다.
+// 현재 thread fdt에 현재 file을 추가한다.
+// 파일 객체에 대한 파일 디스크립터를 생성하는 함수
 int 
 process_add_file(struct file *f) {
  /** 여기서 왜 굳이 struct file **fdt = curr->fdt; 를 해주는지 모르겠음.
 	* 그냥 바로 curr->fdt 에다가 작업해주면 sync error가 생기나?
-	* 나중에 코드 수정해보기.
+	* 나중에 코드 수정해보기. -> 수정해도 정상적으로 작동한다.
   */
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt; // 굳이? 어차피 포인터로 참조하는데 왜?
 
+	// limit를 넘지 않는 범위 안에서 파일을 추가해야 한다.
 	if (curr->fd_idx >= FDCOUNT_LIMIT) {
 		return -1;
 	}
-	fdt[curr->fd_idx++] = f;
+	fdt[curr->fd_idx++] = f; // 파일을 추가했으므로, 현재 fd_idx에다가 +1을 해준다.
 
-	return curr->fd_idx - 1;
+	return curr->fd_idx - 1; // return 값은 일단 지금 파일을 넣은 위치이므로, fd_idx -1을 반환한다.
+/**
+ * 근데 이러면, 만약 중간 지점에 파일을 삭제해서 NULL값이 생길 경우에 그 자리는 어떻게 참조하지?
+ */
 }
 
 // 현재 thread의 fd번째 파일 정보 얻기
-struct file 
-*process_get_file(int fd) 
+struct file *
+process_get_file(int fd) 
 {
     struct thread *curr = thread_current();
 
@@ -711,13 +742,13 @@ struct file
 int 
 process_close_file(int fd) 
 {
-    struct thread *curr = thread_current();
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return -1;
 
-    if (fd < 0 || fd >= FDCOUNT_LIMIT)
-        return -1;
-
-    curr->fdt[fd] = NULL;
-    return 0;
+	fdt[fd] = NULL;
+	return 0;
 }
 
 /* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
@@ -741,8 +772,8 @@ process_insert_file(int fd, struct file *f) {
  * 현재 프로세스의 자식 리스트를 검색하여 해당 pid에 맞는 프로세스 디스크립터를 반환한다.
  * pid를 갖는 프로세스 디스크립터가 존재하지 않을 경우 NULL을 반환한다.
  */
-struct thread 
-*get_child_process(int pid) {
+struct thread *
+get_child_process(int pid) {
 	struct thread *curr = thread_current();
 	struct thread *child;
 

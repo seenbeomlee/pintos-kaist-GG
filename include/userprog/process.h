@@ -19,6 +19,11 @@ void process_activate (struct thread *next);
 void argument_stack(char **argv, int argc, struct intr_frame *if_);
 
 /* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
+/**
+ * 현재 thread의 fdt에 현재 file을 추가한다.
+ * thread에 저장되어 있는 next_fd부터 탐색을 시작하여 LIMIT 전까지 탐색해서 빈 자리에 할당한다.
+ * 할당에 성공했으면 fd를, 실패했으면 -1을 return 한다.
+ */
 int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
 int process_close_file(int fd);

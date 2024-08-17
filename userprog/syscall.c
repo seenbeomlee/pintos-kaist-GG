@@ -78,12 +78,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			halt();
 			break;
 		case SYS_EXIT:
-		/** 현재 동작중인 유저 프로그램을 종료한다.
-		 * 커널에 상태를 return 하면서 종료한다.
-		 * 만약, 부모 프로세스가 현재 유저 프로그램의 종료를 기다리던 중이라면,
-		 * 그 말은 종료되면서 return될 그 상태를 기다린다는 것이다.
-		 * 관례적으로 status == 0은 성공을 뜻하고, 0이 아닌 값들은 error를 의미한다.
-		 */
 			exit(f->R.rdi);
 			break;
 		case SYS_FORK:
@@ -163,7 +157,12 @@ exec (const char *cmd_line) {
 
 	if (cmd_copy == NULL)
 		return -1;
-
+	
+	/** 
+	 * cmd_line을 process_exec에 전달할 복사본을 만든다. 왜 그냥 넘기면 안될까?
+	 * process_exec 함수 안에서 전달 받은 인자를 parsing하는 과정이 있기 때문에 복사본을 만들어서 전달해야 한다.
+	 * cmd_line*은 const char* 타입이라서 수정할 수 없다.
+	 */
 	memcpy(cmd_copy, cmd_line, size);
 
 	if (process_exec(cmd_copy) == -1)

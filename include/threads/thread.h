@@ -154,7 +154,7 @@ struct thread /* TCB 영역의 구성 */
      * 이것이 가리키는 open file table은 (파일의 위치, 파일이 참조된 횟수를 나타내는 ref_cnt 변수 포함한 파일 구조체)
      * 모든 프로세스가 공유한다.
     */
-    int fd_idx; // 파일 디스크립터 인덱스
+    int fd_idx; // 파일 디스크립터 인덱스, 새로 할당한 fd의 인덱스를 나타낸다. == next_fd와 같다.
     struct file **fdt; // 파일 디스크립터 테이블
     /** 파일 테이블은 struct file *fdt[128]과 같이 포인터 배열 형태로 선언하면 struct thread의 크기가 너무 커진다.
      * 이를 방지하기 위해 thread에는 파일 테이블의 시작 주소만 가지고 있게끔 **fdt 형태로 선언해주고,
@@ -166,7 +166,9 @@ struct thread /* TCB 영역의 구성 */
     struct list child_list;
     struct list_elem child_elem;
 
+// for process_fork() & __do_fork()
     struct semaphore fork_sema; // fork가 완료될 때 signal
+// for process_wait()
     struct semaphore exit_sema; // child process 종료 signal
     struct semaphore wait_sema; // exit_sema를 기다릴 때 사용한다.
 #endif

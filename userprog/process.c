@@ -55,15 +55,19 @@ process_create_initd (const char *file_name) {
 
 /* ********** ********** ********** project 2 : argument parsing ********** ********** ********** */
 /* ********** ********** ********** for test ********** ********** ********** */
-    /* Project2: for Test Case - 직접 프로그램을 실행할 때에는 이 함수를 사용하지 않지만 make check에서
-     * 이 함수를 통해 process_create를 실행하기 때문에 이 부분을 수정해주지 않으면 Test Case의 Thread_name이
-     * 커맨드 라인 전체로 바뀌게 되어 Pass할 수 없다.
-		 * 즉, 아래의 두 줄은 테스트를 위한 임시 코드임
-     */
-    char *ptr;
-    strtok_r(file_name, " ", &ptr);
+/* Project2: for Test Case - 직접 프로그램을 실행할 때에는 이 함수를 사용하지 않지만 make check에서
+	* 이 함수를 통해 process_create를 실행하기 때문에 이 부분을 수정해주지 않으면 Test Case의 Thread_name이
+	* 커맨드 라인 전체로 바뀌게 되어 Pass할 수 없다.
+	* 즉, 아래의 두 줄은 테스트를 위한 임시 코드임
+	*/
+	char *ptr;
+	strtok_r(file_name, " ", &ptr);
 
-	/* Create a new thread to execute FILE_NAME. FILE_NAME을 실행할 새 스레드를 만듭니다. */
+	/** Create a new thread to execute FILE_NAME. FILE_NAME을 실행할 새 스레드를 만듭니다. 
+	 * PRI_DEFAULT : 기본 우선순위 31
+	 * file_name을 이름으로 하고, PRI_DEFAULT를 우선순위로 갖는 새로운 thread 생성, tid에 저장한다.
+	 * thread는 fn_copy를 인자로 받는 initd라는 함수를 실행시킨다.
+	*/
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
@@ -96,7 +100,7 @@ initd (void *f_name) {
  * 따라서, f를 fork 함수에 전달해서 인자로 사용해야 한다.
  */
 tid_t
-process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+process_fork (const char *name, struct intr_frame *if_ UNUSED) { // 따라서, intr_frame *if_는 UNUSED 선언되어있음.
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
 
@@ -104,7 +108,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
   memcpy(&curr->parent_if, f, sizeof(struct intr_frame)); // 1.부모를 찾기 위해서, 2. do_fork()에 전달하기 위해서
 	// 현재 thread를 새 thread로 복제한다. tid는 자식 프로세스의 pid가 된다.
 	tid_t tid = thread_create (name,
-			PRI_DEFAULT, __do_fork, curr);
+			PRI_DEFAULT, __do_fork, curr); // __do_fork()를 이용해서 자식 thread를 생성한다.
 
 	if(tid == TID_ERROR)
 		return TID_ERROR;
@@ -123,6 +127,9 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 /* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
+/**
+ * duplicate_pte는 부모의 page table을 복사해서 자신의 pml4를 만드는 함수이다.
+ */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	struct thread *current = thread_current ();
@@ -271,11 +278,6 @@ process_exec (void *f_name) {
 	char *ptr, *arg;
   int argc = 0;
 	char *argv[64];
-  // char *arg_list[32];
-
-	/**
-	 * 나중에 argument parsing 부분 token 형식으로 수정해볼 것
-	 */
   // char *ptr == char *save_ptr
 	// char *arg == char *token
 	// int arg_cht == int argc
@@ -339,15 +341,15 @@ process_wait (tid_t child_tid UNUSED) {
 	
 /* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
 	struct thread *child = get_child_process(child_tid);
-	if (child == NULL)
+	if (child == NULL) // 본인의 자식이 아닌 경우(호출 프로세스의 하위 항목이 아닌 경우)
 		return -1;
 
-// 찾은 자식이 sema_up 해줄때까지(종료될 때까지) 대기한다.
+// 부모 프로세스는 찾은 자식 프로세스가 sema_up 해줄때까지(종료될 때까지) 대기한다.
 	sema_down(&child->wait_sema);
 
-// 자식에게서 종료 signal이 도착하면 자식 list에서 해당 자식을 제거한다.
-	int exit_status = child->exit_status;
-	list_remove(&child->child_elem);
+// 이하에서는 부모 프로세스가 wait_sema가 sema_up되어 깨어난 상태이다.
+	int exit_status = child->exit_status; // 깨어나면 child의 exit_status를 얻는다.
+	list_remove(&child->child_elem); // 자식에게서 종료 signal이 도착하면 자식 list에서 해당 자식을 제거한다.
 
 // 자식이 완전히 종료되어도 괜찮은지 대기하고 있으므로, 부모가 sema_up을 signal으로 보내 완전히 종료되게 해준다.
 	sema_up(&child->exit_sema);
@@ -368,15 +370,16 @@ process_exit (void) {
 		for (int fd = 0; fd < curr->fd_idx; fd++)  // FDT 비우기
 			close(fd);
 
-    file_close(curr->runn_file);  // 현재 프로세스가 실행중인 파일 종료
+    file_close(curr->runn_file);  // 현재 프로세스가 실행중인 파일 종료, for rox- (실행중에 수정 못하도록)
 
-    palloc_free_multiple(curr->fdt, FDT_PAGES);
+    palloc_free_multiple(curr->fdt, FDT_PAGES); // for multi-oom(메모리 누수 방지)
 
-    process_cleanup();
+    process_cleanup(); // pml4를 날림(이 함수를 call한 thread의 pml4를 의미한다.
 
-    sema_up(&curr->wait_sema);  // 자식 프로세스가 종료될 때까지 대기하는 부모에게 signal
+    sema_up(&curr->wait_sema);  // 자식 프로세스가 종료될 때까지 대기하는 부모에게 signal 보냄 -> sema_up에서 val을 올려준다.
 
-    sema_down(&curr->exit_sema);  // 부모 프로세스가 종료될 떄까지 대기
+    sema_down(&curr->exit_sema);  // 부모 프로세스가 종료될 떄까지 대기한다.
+		// 부모가 exit_sema를 sema_up 해주면 이하가 실행되어 process_exit()가 종료된다.
 }
 
 /* Free the current process's resources. */
@@ -674,22 +677,38 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) {
     // argv 배열을 역순으로 stack에 넣는다.
 		// 그리고 각 문자열의 길이에 1을 더한 만큼의 공간을 할당하여 문자열을 복사한다.
     for (int i = argc - 1; i >= 0; i--) {
+				/** size_t strlen(const char* str)
+				 * char* 타입의 문자열을 받아서 해당 문자열의 길이를 반환하는 함수이다.
+				 * char* 이 가리키는 주소부터 시작해서 '\0'이 나올때까지 문자의 개수를 세고, '\0'이 나오면 종료한다.
+				 */
         argv_len = strlen(argv[i]) + 1;
         if_->rsp -= argv_len;
         memcpy(if_->rsp, argv[i], argv_len);
         arg_addr[i] = if_->rsp;
     }
 
-    // stack을 8 byte로 정렬한다.
+    // stack을 8 byte로 정렬한다. word-align padding
     while (if_->rsp % 8)
         *(uint8_t *)(--if_->rsp) = 0;
 
     if_->rsp -= 8;
+		/** void* memset(void* ptr, int value, size_t num)
+		 * 첫 번째 인자 void* ptr은 세팅하고자 하는 메모리의 시작 주소
+		 * 두 번째 인자 int value는 메모리에 세팅하고자 하는 값
+		 * 세 번째 인자 size_t num은 길이를 뜻한다.
+		 * 성공시 return은 ptr, 실패시 NULL을 반환한다.
+		 */
     memset(if_->rsp, 0, sizeof(char *));
 
     // arg_addr 배열의 주소를 stack에 넣는다.
     for (int i = argc - 1; i >= 0; i--) {
         if_->rsp -= 8;
+				/** void* memcpy (void* dest, const void* source, size_t num)
+				 * 메모리의 값을 복사하는 기능을 하는 함수이다.
+				 * void* dest == 복사 받은 메모리를 가리키는 포인터
+				 * const void* source == 복사할 메모리를 가리키는 포인터
+				 * size_t num 복사할 데이터(값)의 길이(byte 단위)
+				 */
         memcpy(if_->rsp, &arg_addr[i], sizeof(char *));
     }
 

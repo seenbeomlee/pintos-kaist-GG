@@ -163,7 +163,7 @@ struct thread /* TCB 영역의 구성 */
 
 /* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
     struct intr_frame parent_if; // parent process의 if
-    struct list child_list;
+    struct list child_list; // parent가 가진 child_list
     struct list_elem child_elem;
 
 // for process_fork() & __do_fork()

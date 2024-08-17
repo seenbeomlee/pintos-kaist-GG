@@ -2,6 +2,7 @@
 #define __LIB_SYSCALL_NR_H
 
 /* System call numbers. */
+// enum은 0부터 1씩 증가하면서 자동으로 할당된다.
 enum {
 	/* Projects 2 and later. */
 	SYS_HALT,                   /* Halt the operating system. */

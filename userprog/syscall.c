@@ -249,7 +249,7 @@ read (int fd, void *buffer, unsigned length) {
 		return i;
 	}
 	// // 빈 파일, stdout, stderr를 읽으려고 할 경우
-	else if(fd == NULL || file == STDOUT || file == STDERR) 
+	else if(file == NULL || file == STDOUT || file == STDERR) 
 		return -1;
 	else {
 		//struct file *file = process_get_file(fd); // 읽을 파일을 가져온다.

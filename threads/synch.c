@@ -261,15 +261,14 @@ lock_try_acquire (struct lock *lock) {
 void
 lock_release (struct lock *lock) 
 {
-  ASSERT (lock != NULL);
-  ASSERT (lock_held_by_current_thread (lock));
-
-	lock->holder = NULL;
-  if (thread_mlfqs) {
-    sema_up (&lock->semaphore);
-    return ;
-  }
-
+   ASSERT (lock != NULL);
+   ASSERT (lock_held_by_current_thread (lock));
+  
+   lock->holder = NULL;
+   if (thread_mlfqs) {
+      sema_up (&lock->semaphore);
+   }
+   else {
 /* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
 	// lock->holder = NULL;
 	// sema_up (&lock->semaphore);
@@ -278,15 +277,16 @@ lock_release (struct lock *lock)
 	// 이 lock을 사용하기 위해 나에게 priority를 빌려준 thread들을 donations list에서 제거하고,
 	// priority를 재설정 해주는 작업이 필요하다.
 	// remove_with_lock (lock);
-    // refresh_priority ();
+   // refresh_priority ();
 /* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-  // priority donation은 mlfqs에서는 비활성화 한다.
-  // 왜냐하면, mlfqs scheduler는 시간에 따라 priority가 재조정되기 때문이다.
-  remove_with_lock (lock);
-  refresh_priority ();
+   // priority donation은 mlfqs에서는 비활성화 한다.
+   // 왜냐하면, mlfqs scheduler는 시간에 따라 priority가 재조정되기 때문이다.
+   remove_with_lock (lock);
+   refresh_priority ();
 	
-	// 아래는 original code
+   // 아래는 original code
 	sema_up (&lock->semaphore);
+  }
 }
 
 

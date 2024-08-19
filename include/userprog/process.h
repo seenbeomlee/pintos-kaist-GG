@@ -12,7 +12,9 @@
  * #define STDIN 0
  * #define STDOUT 1
  * #define STDERR 2
- * 여야 맞는 것 같은데.. 일단 수정하지 말고 넘어가자.
+ * 여야 맞는데, dup2 하면서 index를 하나씩 밀어준 것이다.
+ * 그런데, 이거 때문에 가끔 sync error나는 것 같음. 왜냐하면, 하나씩 밀었으면 최대치도 하나씩 밀리던가 해야하는데
+ * 급조해서 반영이 안된듯.
  */
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);

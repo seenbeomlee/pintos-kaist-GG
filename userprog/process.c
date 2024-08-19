@@ -737,6 +737,10 @@ process_add_file(struct file *f) {
 	if (curr->fd_idx >= FDCOUNT_LIMIT) {
 		return -1;
 	}
+
+	while (fdt[curr->fd_idx] != NULL)
+		curr->fd_idx++;		
+
 	fdt[curr->fd_idx++] = f; // 파일을 추가했으므로, 현재 fd_idx에다가 +1을 해준다.
 
 	return curr->fd_idx - 1; // return 값은 일단 지금 파일을 넣은 위치이므로, fd_idx -1을 반환한다.
@@ -749,12 +753,12 @@ process_add_file(struct file *f) {
 struct file *
 process_get_file(int fd) 
 {
-    struct thread *curr = thread_current();
+	struct thread *curr = thread_current();
 
-    if (fd < 0 || fd >= FDCOUNT_LIMIT)
-        return NULL;
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return NULL;
 
-    return curr->fdt[fd];
+	return curr->fdt[fd];
 }
 
 // 현재 thread의 fdt에서 파일을 삭제한다.
@@ -762,11 +766,11 @@ int
 process_close_file(int fd) 
 {
 	struct thread *curr = thread_current();
-	struct file **fdt = curr->fdt;
+
 	if (fd < 0 || fd >= FDCOUNT_LIMIT)
 		return -1;
 
-	fdt[fd] = NULL;
+	curr->fdt[fd] = NULL;
 	return 0;
 }
 

@@ -8,6 +8,12 @@
 #define STDOUT 2
 #define STDERR 3
 
+/**
+ * #define STDIN 0
+ * #define STDOUT 1
+ * #define STDERR 2
+ * 여야 맞는 것 같은데.. 일단 수정하지 말고 넘어가자.
+ */
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);
 int process_exec (void *f_name);

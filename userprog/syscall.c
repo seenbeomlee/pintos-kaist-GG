@@ -297,24 +297,23 @@ write (int fd, const void *buffer, unsigned length) {
 
 void
 seek (int fd, unsigned position) {
-	if(fd < 3) return;
+        
+    struct file *file = process_get_file(fd);
 
-	struct file *file = process_get_file(fd);
-	if(file == NULL)
-		return;
-	else
-		file_seek(file, position);
+    if (file == NULL || (file >= STDIN && file <= STDERR))
+        return;
+
+    file_seek(file, position);
 }
 
 unsigned
 tell (int fd) {
-	if(fd < 3) return;
+    struct file *file = process_get_file(fd);
 
-	struct file *file = process_get_file(fd);
-	if(file == NULL)
-		return;
-	else
-		return file_tell(file);
+    if (file == NULL || (file >= STDIN && file <= STDERR))
+        return -1;
+
+    return file_tell(file);
 }
 
 void

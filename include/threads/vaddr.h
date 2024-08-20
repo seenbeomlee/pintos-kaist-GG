@@ -37,34 +37,6 @@
 /* User stack start */
 #define USER_STACK 0x47480000
 
-// USER_STACK +----------------------------------+
-//            |             user stack           |
-//            |                 |                |
-//            |                 |                |
-//            |                 V                |
-//            |           grows downward         |
-//            |                                  |
-//            |                                  |
-//            |                                  |
-//            |                                  |
-//            |           grows upward           |
-//            |                 ^                |
-//            |                 |                |
-//            |                 |                |
-//            +----------------------------------+
-//            | uninitialized data segment (BSS) |
-//            +----------------------------------+
-//            |     initialized data segment     |
-//            +----------------------------------+
-//            |            code segment          |
-//  0x400000  +----------------------------------+
-//            |                                  |
-//            |                                  |
-//            |                                  |
-//            |                                  |
-//            |                                  |
-//        0   +----------------------------------+
-
 /* Returns true if VADDR is a user virtual address. */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))
 

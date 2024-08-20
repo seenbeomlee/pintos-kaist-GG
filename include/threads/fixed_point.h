@@ -1,7 +1,4 @@
 /** project1-Advanced Scheduler */
-
-#include <stdio.h>
-
 #define F (1 << 14)
 #define INT_MAX ((1 << 31) - 1)
 #define INT_MIN (-(1 << 31))
@@ -22,7 +19,8 @@ int mult_fp(int x, int y);    /* FP의 곱셈 */
 int mult_mixed(int x, int y); /* FP와 int의 곱셈 */
 int div_fp(int x, int y);     /* FP의 나눗셈(x/y) */
 int div_mixed(int x, int n);  /* FP와 int 나눗셈(x/n) */
-
+ 
+ 
 /* 함수 본체 */
 
 /* integer를 fixed point로 전환 */

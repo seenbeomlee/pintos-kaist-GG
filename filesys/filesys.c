@@ -57,12 +57,6 @@ filesys_done (void) {
  * Returns true if successful, false otherwise.
  * Fails if a file named NAME already exists,
  * or if internal memory allocation fails. */
-/** create(const char *file, unsigned int initial_size) 
- * 첫 번째로 create 함수이다.
- * 생성할 파일의 이름과 만들 파일의 사이즈를 파라미터로 받고,
- * 디스크에 해당 이름으로 파일을 만드는 시스템 콜이다.
- * 파일 생성에 성공하면 true를, 실패하면 false를 return 한다.
-*/
 bool
 filesys_create (const char *name, off_t initial_size) {
 	disk_sector_t inode_sector = 0;
@@ -83,31 +77,22 @@ filesys_create (const char *name, off_t initial_size) {
  * otherwise.
  * Fails if no file named NAME exists,
  * or if an internal memory allocation fails. */
-/** open(const char *file) 
- * 파라미터로 받은 file과 같은 이름을 가진 파일을 디스크에서 찾아 연다.
- * 파일이 정상적으로 열린 경우, 해당 파일에 대한 구조체 포인터인 struct file *을 반환한다.
- * 파일을 정상적으로 열지 못한 경우(파일을 찾지 못하거나, 내부 메모리 할당에 실패한 경우)에는 -1을 return 한다.
-*/
 struct file *
 filesys_open (const char *name) {
-	struct dir *dir = dir_open_root (); 
+	struct dir *dir = dir_open_root ();
 	struct inode *inode = NULL;
 
 	if (dir != NULL)
-		dir_lookup (dir, name, &inode); // 파일을 open하기 전에 먼저 디렉터리에서 파일을 찾는다.
+		dir_lookup (dir, name, &inode);
 	dir_close (dir);
 
-	return file_open (inode); // 파일이 존재하는 inode를 찾아, 그 inode를 파라미터로 넘겨 file_open 함수를 실행시킨다.
+	return file_open (inode);
 }
 
 /* Deletes the file named NAME.
  * Returns true if successful, false on failure.
  * Fails if no file named NAME exists,
  * or if an internal memory allocation fails. */
-/** remove(const char *file)
- * 지울 파일의 이름을 파라미터로 받고, 디스크에서 해당 이름과 같은 이름을 가진 파일을 지우는 시스템 콜이다.
- * 파일 삭제에 성공하면 true를, 실패하면 false를 return 한다.
- */
 bool
 filesys_remove (const char *name) {
 	struct dir *dir = dir_open_root ();

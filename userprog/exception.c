@@ -140,8 +140,8 @@ page_fault (struct intr_frame *f) {
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
 
-/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
-	exit(-1); // for test
+	/** project2-System Call */
+	exit(-1);
 
 #ifdef VM
 	/* For project 3 and later. */

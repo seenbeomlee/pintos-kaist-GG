@@ -10,8 +10,8 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "threads/fixed_point.h" // for project 1: advanced scheduler
 #include "intrinsic.h"
+#include "threads/fixed_point.h" /** project1-Advanced Scheduler */
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -25,18 +25,15 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
+/** project1-Alarm Clock */
+static struct list sleep_list;
+static int64_t next_tick_to_awake;
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
 
-/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-/* list for sleep */
-static struct list sleep_list; /* block된 스레드를 저장할 공간 */
-static int64_t next_tick_to_awake;
-
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-/** List of all processes.  Processes are added to this list
-   when they are first scheduled and removed when they exit. */
+/** project1-Advanced Scheduler */
 static struct list all_list;
 
 /* Idle thread. */
@@ -65,7 +62,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+/** project1-Advanced Scheduler */
 int load_avg;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -123,19 +120,17 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
-/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-	list_init (&sleep_list); /* sleep_list를 사용할 수 있도록 sleep_list를 초기화하는 코드 */
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-	list_init (&all_list); /* all_list 사용할 수 있도록 all_list 초기화하는 코드 */
+	list_init (&sleep_list); /** project1-Alarm Clock */
+	list_init(&all_list); /** project1-Advanced Scheduler */
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 
-// /* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
- 	if (thread_mlfqs) {
- 		list_push_back(&all_list, &(initial_thread->all_elem));
-	}
+	/** project1-Advanced Scheduler */
+	if (thread_mlfqs)
+		list_push_back(&all_list, &(initial_thread->all_elem));
+
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
 }
@@ -149,9 +144,8 @@ thread_start (void) {
 	sema_init (&idle_started, 0);
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-  load_avg = LOAD_AVG_DEFAULT;
-  // 새롭게 추가한 변수를 초기화 하는 과정
+	/** project1-Advanced Scheduler */
+	load_avg = LOAD_AVG_DEFAULT;
 
 	/* Start preemptive thread scheduling. */
 	intr_enable ();
@@ -220,31 +214,20 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
-/* ********** ********** ********** project 2 : File I/O ********** ********** ********** */
-#ifdef USERPROG
-	t->fdt = palloc_get_multiple (PAL_ZERO, FDT_PAGES);
-	if (t == NULL) {
-		return TID_ERROR;
-	}
+	#ifdef USERPROG
+	/** project2-System Call */
+    t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+    if (t->fdt == NULL)
+        return TID_ERROR;
 
-	/** 변수를 초기화하는 과정
-	 * 	프로세스에서 소켓을 열거나, 파일을 열 때 할당되는 파일 디스크립터는 항상 3부터 시작한다. 0, 1, 2는 시스템 상 먼저 예약되어 있기 때문이다.
-	 *	 0 == standard input
-	 *	 1 == standard output
-	 * 	2 == standard error
-	*/
-	t->exit_status = 0;
+    t->exit_status = 0; 
 
-	t->fd_idx = 3;
-	/** struct file **fdt 여서, file *fdt가 들어가야 하나, dummy값 이기에 int 0, 1, 2를 넣어 warning 발생. 
-	 * fdt에 stdin, stdout, stderr 설정. */
-	/* ********** ********** ********** project 2 : Extend File Descriptor ********** ********** ********** */
-	t->fdt[0] = STDIN; // stdin 예약된 자리 (dummy)
-	t->fdt[1] = STDOUT; // stdout 예약된 자리 (dummy)
-	t->fdt[2] = STDERR; // stderr 예약된 자리 (dummy)
-
-/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
-	list_push_back(&thread_current()->child_list, &t->child_elem);
+    t->fd_idx = 3;
+    t->fdt[0] = STDIN;   
+    t->fdt[1] = STDOUT; 
+    t->fdt[2] = STDERR;  
+	
+    list_push_back(&thread_current()->child_list, &t->child_elem);
 #endif
 
 	/* Call the kernel_thread if it scheduled.
@@ -260,8 +243,11 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-/* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
-  thread_test_preemption ();
+
+	/** project1-Priority Scheduling */
+	if(t->priority > thread_current()->priority)
+		thread_yield();
+
 	return tid;
 }
 
@@ -289,16 +275,17 @@ thread_block (void) {
    update other data. */
 void
 thread_unblock (struct thread *t) {
-  enum intr_level old_level;
+	enum intr_level old_level;
 
-  ASSERT (is_thread (t));
+	ASSERT (is_thread (t));
 
-  old_level = intr_disable ();
-  ASSERT (t->status == THREAD_BLOCKED);
-  // list_push_back (&ready_list, &t->elem); // list push back 함수는 round-robin 방식에서 elem을 list의 맨 뒤에 push 하는 함수이다.
-  list_insert_ordered (&ready_list, &t->elem, thread_compare_priority, 0);
-  t->status = THREAD_READY;
-  intr_set_level (old_level);
+	old_level = intr_disable ();
+	ASSERT (t->status == THREAD_BLOCKED);
+	/** project1-Priority Scheduling */
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
+	//list_push_back (&ready_list, &t->elem);
+	t->status = THREAD_READY;
+	intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -340,11 +327,9 @@ thread_exit (void) {
 #ifdef USERPROG
 	process_exit ();
 #endif
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+	/** project1-Advanced Scheduler */
 	if (thread_mlfqs)
-    list_remove(&thread_current()->all_elem);
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-
+        list_remove(&thread_current()->all_elem);
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
@@ -356,16 +341,16 @@ thread_exit (void) {
    may be scheduled again immediately at the scheduler's whim. */
 void
 thread_yield (void) {
-  struct thread *cur = thread_current ();
-  enum intr_level old_level;
-  
-  ASSERT (!intr_context ());
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
 
-  old_level = intr_disable ();
-  if (cur != idle_thread) {
-    	// list_push_back (&ready_list, &cur->elem); 이는 round-robin 방식에 사용되는 단순 list_push_back() 함수이다.
-    	list_insert_ordered (&ready_list, &cur->elem, thread_compare_priority, 0);
-	}
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable ();
+	if (curr != idle_thread)
+		//list_push_back (&ready_list, &curr->elem);
+		/** project1-Priority Scheduling */
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -373,23 +358,19 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-  	// mlfqs scheduler 에서는 priority를 임의로 변경할 수 없기 때문에, thread_set_priority() 함수 역시 비활성화 시켜야 한다.
-  	if (thread_mlfqs) {
-    	return;
-  	}
 
-/* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
-	// 만약, 현재 진행중인 running thread의 priority 변경이 일어났을 때,
-	// donations list들에 있는 thread들보다 priority가 높아지는 경우가 생길 수 있다.
-	// 이 경우, priority는 donations list 중 가장 높은 priority가 아니라, 새로 바뀐 priority가 적용될 수 있게 해야 한다.
-	// 이는 thread_set_priority에 refresh_priority() 함수를 추가하는 것으로 간단하게 가능하다.
-	// thread_current ()->priority = new_priority; 원래 존재하던 코드 priority -> init_priority로 변경.
-	thread_current ()->init_priority = new_priority;
-  refresh_priority ();
+	/** project1-Advanced Scheduler */
+	if (thread_mlfqs)
+        return;
 
-/* ********** ********** ********** project 1 : priority scheduleing(1) ********** ********** ********** */
-	thread_test_preemption ();
+	/** project1-Priority Inversion Problem */
+    thread_current()->original_priority = new_priority;
+	
+	/** project1-Priority Inversion Problem */
+    refresh_priority();
+
+	/** project1-Priority Scheduling */
+	test_max_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -398,53 +379,55 @@ thread_get_priority (void) {
 	return thread_current ()->priority;
 }
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-/** Sets the current thread's nice value to NICE. */
+/* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
-{ // 현재 thread의 nice 값을 새 값으로 설정한다.
-  enum intr_level old_level = intr_disable (); // 각 값들을 변경할 시에는 interrupt를 비활성화 해야한다.
-  thread_current ()->nice = nice;
-  mlfqs_calculate_priority (thread_current ());
-  thread_test_preemption ();
-  intr_set_level (old_level); // 다시 interrupt를 활성화 해준다.
+thread_set_nice (int nice UNUSED) {
+	/** project1-Advanced Scheduler */
+    struct thread *t = thread_current();
+
+    enum intr_level old_level = intr_disable();
+    t->niceness = nice;
+    mlfqs_priority(t);
+    test_max_priority();
+    intr_set_level(old_level);
 }
 
-/** Returns the current thread's nice value. */
+/* Returns the current thread's nice value. */
 int
-thread_get_nice (void) 
-{ // 현재 thread의 nice 값을 반환한다.
-  enum intr_level old_level = intr_disable ();
-  int nice = thread_current ()-> nice;
-  intr_set_level (old_level);
-  return nice;
+thread_get_nice (void) {
+	/** project1-Advanced Scheduler */
+    struct thread *t = thread_current();
+
+    enum intr_level old_level = intr_disable();
+    int nice = t->niceness;
+    intr_set_level(old_level);
+
+    return nice;
 }
 
-/** Returns 100 times the system load average. */
+/* Returns 100 times the system load average. */
 int
-thread_get_load_avg (void) 
-{ // 현재 system의 load_avg * 100 값을 반환한다.
-  enum intr_level old_level = intr_disable ();
-  // pintos document의 지시대로 100을 곱한 후 정수형으로 만들고 반올림하여 반환한다.
-  // 정수형 반환값에서 소수점 둘째 자리까지의 값을 확인할 수 있도록 하는 용도이다.
-  int load_avg_value = fp_to_int_round (mult_mixed (load_avg, 100));
-  intr_set_level (old_level);
-  return load_avg_value;
+thread_get_load_avg (void) {
+	/** project1-Advanced Scheduler */
+    enum intr_level old_level = intr_disable();
+    int load_avg_val = fp_to_int_round(mult_mixed(load_avg, 100));  
+    intr_set_level(old_level);
+
+    return load_avg_val;
 }
 
-/** Returns 100 times the current thread's recent_cpu value. */
+/* Returns 100 times the current thread's recent_cpu value. */
 int
-thread_get_recent_cpu (void) 
-{ // 현재 thread의 recent_cpu * 100 값을 반환한다.
-  enum intr_level old_level = intr_disable ();
-  // pintos document의 지시대로 100을 곱한 후 정수형으로 만들고 반올림하여 반환한다.
-  // 정수형 반환값에서 소수점 둘째 자리까지의 값을 확인할 수 있도록 하는 용도이다.
-  int recent_cpu= fp_to_int_round (mult_mixed (thread_current ()->recent_cpu, 100));
-  intr_set_level (old_level);
-  return recent_cpu;
-}
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
+thread_get_recent_cpu (void) {
+	/** project1-Advanced Scheduler */
+    struct thread *t = thread_current();
 
+    enum intr_level old_level = intr_disable();
+    int recent_cpu = fp_to_int_round(mult_mixed(t->recent_cpu, 100)); 
+    intr_set_level(old_level);
+
+    return recent_cpu;
+}
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -507,36 +490,31 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 
-	if (thread_mlfqs) {
-		mlfqs_calculate_priority(t);
-		list_push_back (&all_list, &t->all_elem);
-	} else {
-		t->priority = priority;
-	}
+	/** project1-Advanced Scheduler */
+    if (thread_mlfqs) {
+        mlfqs_priority(t);
+        list_push_back(&all_list, &t->all_elem);
+    } else {
+        t->priority = priority;
+    }
 
-/* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
-	// 새롭게 추가한 요소를 초기화 하는 과정
-  t->init_priority = priority;
-	t->wait_on_lock = NULL;
-  list_init (&t->donations);
+    t->wait_lock = NULL;
+    list_init(&t->donations);
 
-	t->magic = THREAD_MAGIC;
+    t->magic = THREAD_MAGIC;
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-	// 새롭게 추가한 요소를 초기화 하는 과정
-	t->nice = NICE_DEFAULT;
-  t->recent_cpu = RECENT_CPU_DEFAULT;
+    /** #Advanced Scheduler */
+    t->original_priority = t->priority;
+    t->niceness = NICE_DEFAULT;
+    t->recent_cpu = RECENT_CPU_DEFAULT;
 
-/* ********** ********** ********** project 2 : system call ********** ********** ********** */
-	// t->exit_status = 0;
+	/** project2-System Call */
+    t->runn_file = NULL;
 
-/* ********** ********** ********** project 2 : Hierarchical Process Structure ********** ********** ********** */
-	t->runn_file = NULL;
-
-	list_init(&t->child_list);
-	sema_init(&t->fork_sema, 0);
-	sema_init(&t->exit_sema, 0);
-	sema_init(&t->wait_sema, 0);
+    list_init(&t->child_list);
+    sema_init(&t->fork_sema, 0);
+    sema_init(&t->exit_sema, 0);
+    sema_init(&t->wait_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -717,214 +695,223 @@ allocate_tid (void) {
 	return tid;
 }
 
-/* ********** ********** ********** new functions below ********** ********** ********** */
-/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-/* thread를 재우는 작업 */
-/* 일어날 시간을 저장한 다음에 재워야 할 thread를 sleep_list에 추가한다. */
-/* thread의 상태를 block state로 만든다. */
-void
-thread_sleep (int64_t wakeup_ticks)
+/** project1-Alarm Clock */
+void 
+thread_sleep (int64_t ticks) 
 {
-  struct thread *cur;
-  enum intr_level old_level;
+    struct thread *this;
+    this = thread_current();
 
-	old_level = intr_disable (); // interrupt off & get previous interrupt state(INTR_ON maybe)
-	cur = thread_current ();
+    if (this == idle_thread) // idle -> stop
+	{  
+        ASSERT(0);
+    } else 
+	{
+        enum intr_level old_level;
+        old_level = intr_disable();  // pause interrupt
 
-  ASSERT (cur != idle_thread); // CPU가 항상 실행 상태를 유지하게 하기 위해 idel thread는 sleep되지 않아야 한다.
+        update_next_tick_to_awake(this->wakeup_tick = ticks);  // update awake ticks
 
-  cur->wakeup_time = wakeup_ticks; // 현재 running 중인 thread A가 일어날 시간을 저장
-  list_push_back (&sleep_list, &cur->elem); // sleep_list 에 추가한다.
-  thread_block (); //thread A를 block 상태로 변경한다.
-   
-  intr_set_level (old_level); // interrupt on
-}
+        list_push_back(&sleep_list, &this->elem);  // push to sleep_list
 
-/* block된 thread들이 일어날 시간이 되었을 때 깨우는 함수 */
-void
-thread_awake (int64_t ticks)
-{
-  struct list_elem *e = list_begin (&sleep_list);
+        thread_block();  // block this thread
 
-  while (e != list_end (&sleep_list)){
-    struct thread *t = list_entry (e, struct thread, elem);
-    if (t->wakeup_time <= ticks){	// 스레드가 일어날 시간이 되었는지 확인
-      e = list_remove (e);	// sleep list 에서 제거
-      thread_unblock (t);	// 스레드 unblock
+        intr_set_level(old_level);  // continue interrupt
     }
-    else 
-      e = list_next (e);
-  }
 }
 
-/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
+/** project1-Alarm Clock */
+void 
+thread_awake (int64_t wakeup_tick) 
+{
+    next_tick_to_awake = INT64_MAX;
 
-/* ********** ********** ********** project 1 : priority schedulder(1) ********** ********** ********** */
-// list_insert_ordered(struct list *list, struct list_elem *elem, list_less_func *less, void *aux)
-// list_insert(struct list_elem *before, struct list_elem *elem) 해당 함수는 elem을 e의 '앞에' 삽입한다.
-// 우리는 ready_list에서 thread를 pop할 때 가장 앞에서 꺼내기로 하였다.
-// 따라서, 가장 앞에 priority가 가장 높은 thread가 와야 한다.
-// 즉, ready_list는 내림차순으로 정렬되어야 한다.
-// if(less (elem, e, aux))가 elem > e인 순간에 break; 를 해주어야 한다.
-// 즉, 우리가 만들어야 하는 order 비교함수 less(elem, e, aux)는 elem > e일 때 true를 반환하는 함수이다.
+    struct list_elem *sleeping;
+    sleeping = list_begin(&sleep_list);  // take sleeping thread
+
+    while (sleeping != list_end(&sleep_list)) {  // for all sleeping threads
+        struct thread *th = list_entry(sleeping, struct thread, elem);
+
+        if (wakeup_tick >= th->wakeup_tick) 
+		{
+            sleeping = list_remove(&th->elem);  // delete thread
+            thread_unblock(th);                 // unblock thread
+        } 
+		else 
+		{
+            sleeping = list_next(sleeping);              // move to next sleeping thread
+            update_next_tick_to_awake(th->wakeup_tick);  // update wakeup_tick
+        }
+    }
+}
+
+/** project1-Alarm Clock */
+void 
+update_next_tick_to_awake (int64_t ticks) 
+{
+	// find smallest tick
+    next_tick_to_awake = (next_tick_to_awake > ticks) ? ticks : next_tick_to_awake;
+}
+
+/** project1-Alarm Clock */
+int64_t
+get_next_tick_to_awake(void)
+{
+	return next_tick_to_awake;
+}
+
+/** project1-Priority Scheduling */
+void 
+test_max_priority (void) 
+{
+    if (list_empty(&ready_list))
+        return;
+
+    struct thread *th = list_entry(list_front(&ready_list), struct thread, elem);
+
+    if (thread_current()->priority < th->priority) {
+        /** Project 2: Panic 방지 */
+        if (intr_context())
+            intr_yield_on_return();
+        else
+            thread_yield();
+    }
+}
+/** project1-Priority Scheduling */
 bool 
-thread_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED)
+cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) 
 {
-    return list_entry (l, struct thread, elem)->priority
-         > list_entry (s, struct thread, elem)->priority;
+    struct thread*thread_a = list_entry(a, struct thread, elem);
+    struct thread*thread_b = list_entry(b, struct thread, elem);
+
+	if (thread_a == NULL || thread_b == NULL)
+		return false;
+
+    return thread_a->priority > thread_b->priority;
 }
 
-// 현재 실행중인 running thread의 priority가 바뀌는 순간이 있다.
-// 이때 바뀐 priority가 ready_list의 가장 높은 priority보다 낮다면 CPU 점유를 넘겨주어야 한다.
-// 현재 실행중인 thread의 priority가 바뀌는 순간은 두 가지 경우이다.
-// (1) thread_create() -- thread가 새로 생성되어서 ready_list에 추가된다.
-// (2) thread_set_priority() -- 현재 실행중인 thread의 우선순위가 재조정된다.
-// 두 경우의 마지막에 running thread와 ready_list의 가장 앞의 thread의 priority를 비교하는 코드를 넣어주어야 한다.
-// running thread와 ready_list의 가장 앞 thread의 priority를 비교하고,
-// 만약 ready_list의 thread가 더 높은 priority를 가진다면 thread_yield()를 실행하여 CPU의 점유권을 넘겨준다.
-// 이 함수를 (1), (2)에 추가한다.
+/** project1-Priority Inversion Problem */
 void 
-thread_test_preemption (void)
+donate_priority() 
 {
-    if (!list_empty (&ready_list) && 
-		!intr_context() &&
-		// priority1 < priority2 라면, priority2의 우선순위가 더 높음을 의미한다. 또한 이것이 list의 맨 앞에 추가된다.
-    thread_current ()->priority < 
-    list_entry (list_front (&ready_list), struct thread, elem)->priority)
-        thread_yield ();
+    struct thread *t = thread_current();
+    int priority = t->priority;
+
+    for (int depth = 0; depth < 8; depth++) 
+	{
+        if (t->wait_lock == NULL)
+            break;
+
+        t = t->wait_lock->holder;
+        t->priority = priority;
+    }
 }
 
-/* ********** ********** ********** project 1 : priority inversion(donation) ********** ********** ********** */
-// 위의 thread_compare_priority과 동일하다. 다만, elem이 아니라, donation elem을 대상으로 진행한다는 점이 다르다.
-bool
-thread_compare_donate_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED)
+/** project1-Priority Inversion Problem */
+void remove_with_lock(struct lock *lock) 
 {
-	return list_entry (l, struct thread, donation_elem)->priority
-		 > list_entry (s, struct thread, donation_elem)->priority;
+    struct thread *t = thread_current();
+    struct list_elem *curr = list_begin(&t->donations);
+    struct thread *curr_thread = NULL;
+
+    while (curr != list_end(&t->donations)) 
+	{
+        curr_thread = list_entry(curr, struct thread, donation_elem);
+
+        if (curr_thread->wait_lock == lock)
+            list_remove(&curr_thread->donation_elem);
+
+        curr = list_next(curr);
+    }
 }
 
-// 자신의 priority를 필요한 lock을 점유하고 있는 thread에게 빌려주는 함수이다.
-// 주의할 점은, nested donation을 위해 하위에 연결된 모든 thread에 donation이 일어나야 한다는 것이다.
-void
-donate_priority (void) {
-  int depth;
-  struct thread *cur = thread_current ();
-
-  for (depth = 0; depth < 8; depth++){ // max_depth == 8
-    if (!cur->wait_on_lock) break; // thread의 wait_on_lock이 NULL이라면 더이상 donation을 진행할 필요가 없으므로 멈춘다.
-    struct thread *holder = cur->wait_on_lock->holder;
-    holder->priority = cur->priority;
-    cur = holder;
-  }
-}
-
-void
-remove_with_lock (struct lock *lock)
+/** project1-Priority Inversion Problem */
+void refresh_priority(void) 
 {
-	struct list_elem *e;
-  struct thread *cur = thread_current ();
+    struct thread *t = thread_current();
+    t->priority = t->original_priority;
 
-  for (e = list_begin (&cur->donations); e != list_end (&cur->donations); e = list_next (e)){
-    struct thread *t = list_entry (e, struct thread, donation_elem);
-    if (t->wait_on_lock == lock) // wait_on_lock이 이번에 release하는 lock이라면, 해당 thread를 donation list에서 지운다.
-      list_remove (&t->donation_elem); // 모든 donations list와 관련된 작업에서는 elem이 아니라, donation_elem을 사용한다.
-  }
+    if (list_empty(&t->donations))
+        return;
+
+    list_sort(&t->donations, cmp_priority, NULL);
+
+    struct list_elem *max_elem = list_front(&t->donations);
+    struct thread *max_thread = list_entry(max_elem, struct thread, donation_elem);
+
+    if (t->priority < max_thread->priority)
+        t->priority = max_thread->priority;
 }
 
-void
-refresh_priority (void)
-{
-	struct thread *cur = thread_current ();
-
-  cur->priority = cur->init_priority; // donations list가 비어있을 때는 cur thread에 init_priority를 삽입해준다.
-  
-	  // 허나, donations list에 thread가 남아있다면 thread 중에서 가장 높은 priority를 가져와서 삽입해야한다.
-  if (!list_empty (&cur->donations)) {
-    list_sort (&cur->donations, thread_compare_donate_priority, 0); // donations list를 내림차순으로 정렬한다.
-
-    // 그 후, 맨 앞의 thread(우선순위가 가장 큰)를 가져온다.
-    struct thread *front = list_entry (list_front (&cur->donations), struct thread, donation_elem);
-		// init_priority와 비교하여 더 큰 priority를 삽입한다.
-    if (front->priority > cur->priority)
-      cur->priority = front->priority;
-  }
-}
-
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-// mlfqs_caculate_priority 함수는 priority를 계산한다.
-// idel_thread의 priority는 고정이므로 제외하고, fixed_point.h에서 만든 fp 연산 함수를 사용하여 priority를 구한다.
-// 계산 결과의 소수점 부분은 버림하고, 정수의 priority로 설정한다.
-void
-mlfqs_calculate_priority (struct thread *t)
-{
-  if (t == idle_thread) 
-    return ;
-  t->priority = fp_to_int (add_mixed (div_mixed (t->recent_cpu, -4), PRI_MAX - t->nice * 2));
-}
-
-// mlfqs_calculate_recent_cpu 함수는 특정 thread의 priority를 계산하는 함수이다.
-void
-mlfqs_calculate_recent_cpu (struct thread *t)
-{
-  if (t == idle_thread)
-    return ;
-  t->recent_cpu = add_mixed (mult_fp (div_fp (mult_mixed (load_avg, 2), add_mixed (mult_mixed (load_avg, 2), 1)), t->recent_cpu), t->nice);
-}
-
-// mlfqs_calculate_load_avg 함수는 load_avg 값을 계산하는 함수이다.
-// load_avg 값은 thread 고유의 값이 아니라, system wide 값이기 때문에, idle_thread가 실행되는 경우에도 계산하여 준다.
+/** project1-Advanced Scheduler */
 void 
-mlfqs_calculate_load_avg (void) 
+mlfqs_priority (struct thread *t) 
 {
-  int ready_threads;
-  
-	// ready_threads는 현재 시점에서 실행 가능한 thread의 수를 나타내므로,
-	// ready_list에 들어있는 thread의 숫자에 현재 running thread 1개를 더한다.
-	// idle thread는 실행 가능한 thread에 포함시키지 않는다.
-  if (thread_current () == idle_thread)
-    ready_threads = list_size (&ready_list);
-  else
-    ready_threads = list_size (&ready_list) + 1;
+    if (t == idle_thread)
+        return;
 
-  load_avg = add_fp (mult_fp (div_fp (int_to_fp (59), int_to_fp (60)), load_avg), 
-                     mult_mixed (div_fp (int_to_fp (1), int_to_fp (60)), ready_threads));
+    t->priority = fp_to_int(add_mixed(div_mixed(t->recent_cpu, -4), PRI_MAX - t->niceness * 2));
 }
 
-// 각 값들이 변하는 시점에 수행할 함수를 만든다. 값들이 변화하는 시점은 3가지가 있다.
-// (1) 1 tick마다 running thread의 recent_cpu 값 + 1
-// (2) 4 tick마다 모든 thread의 priority 값 재계산
-// (3) 1 초마다 모든 thread의 recent_cpu값과 load_avg 값 재계산 
-// 아래의 mlfqs_increment_recent_cpu, mlfqs_recalculate_recent_cpu, mlfqs_recalculate_priority 함수를
-// 해당하는 시간 주기마다 실행되도록 timer_interrupt 함수를 바꾸어주면 된다. -> <devices/timer.c> -> timer_interrupt ()
-
-// 현재 thread의 recent_cpu 값을 1 증가시키는 함수이다.
-void
-mlfqs_increment_recent_cpu (void)
+/** project1-Advanced Scheduler */
+void 
+mlfqs_recent_cpu (struct thread *t) 
 {
-  if (thread_current () != idle_thread)
-    thread_current ()->recent_cpu = add_mixed (thread_current ()->recent_cpu, 1);
+    if (t == idle_thread)
+        return;
+
+    t->recent_cpu = add_mixed(mult_fp(div_fp(mult_mixed(load_avg, 2), add_mixed(mult_mixed(load_avg, 2), 1)), t->recent_cpu), t->niceness);
 }
 
-// 모든 thread의 recent_cpu를 재계산하는 함수이다.
-void
-mlfqs_recalculate_recent_cpu (void)
+/** project1-Advanced Scheduler */
+void 
+mlfqs_load_avg (void) 
 {
-  struct list_elem *e;
+    int ready_threads;
 
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-    struct thread *t = list_entry (e, struct thread, all_elem);
-    mlfqs_calculate_recent_cpu (t);
-  }
+    ready_threads = list_size(&ready_list);
+
+    if (thread_current() != idle_thread)
+        ready_threads++;
+
+    load_avg = add_fp(mult_fp(div_fp(int_to_fp(59), int_to_fp(60)), load_avg), mult_mixed(div_fp(int_to_fp(1), int_to_fp(60)), ready_threads));
 }
 
-// 모든 thread의 priority를 재계산하는 함수이다.
-void
-mlfqs_recalculate_priority (void)
+/** project1-Advanced Scheduler */
+void 
+mlfqs_increment (void) 
 {
-  struct list_elem *e;
+    if (thread_current() == idle_thread)
+        return;
 
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-    struct thread *t = list_entry (e, struct thread, all_elem);
-    mlfqs_calculate_priority (t);
-  }
+    thread_current()->recent_cpu = add_mixed(thread_current()->recent_cpu, 1);
+}
+
+/** project1-Advanced Scheduler */
+void 
+mlfqs_recalc_recent_cpu (void) 
+{
+    struct list_elem *e = list_begin(&all_list);
+    struct thread *t = NULL;
+
+    while (e != list_end(&all_list)) {
+        t = list_entry(e, struct thread, all_elem);
+        mlfqs_recent_cpu(t);
+
+        e = list_next(e);
+    }
+}
+
+/** project1-Advanced Scheduler */
+void mlfqs_recalc_priority (void) 
+{
+    struct list_elem *e = list_begin(&all_list);
+    struct thread *t = NULL;
+
+    while (e != list_end(&all_list)) {
+        t = list_entry(e, struct thread, all_elem);
+        mlfqs_priority(t);
+
+        e = list_next(e);
+    }
 }

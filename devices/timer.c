@@ -82,7 +82,6 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-/* ticks란, PintOS 내부에서 시간을 나타내기 위한 값으로 부팅 이후에 일정한 시간마다 1씩 증가한다. */
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
@@ -94,20 +93,10 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-
-/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-  /* 
-    필요없어진 기존 코드 삭제 
-    timer_elased 함수는 특정시간 이후로 경과된 시간(ticks)을 반환한다.
-    즉, timer_elapsed(start)는 start 이후로 경과된 시간(ticks)을 반환한다.
-  */  
-  // while (timer_elapsed (start) < ticks) 
-  // thread_yield ();
-
-  // start 변수는 os가 시작된 후부터 지난 tick을 반환하는 timer_ticks() 값을 저장한다. 
-  // timer_sleep() 함수가 호출되면 thread가 block 상태로 들어간다. 
-  // 이렇게 block 된 thread 들은 일어날 시간이 되었을 때 awake 되어야 한다. 
-  thread_sleep(start + ticks); 
+	/** project1-Alarm Clock 
+	while (timer_elapsed (start) < ticks)
+		thread_yield (); */
+	thread_sleep (start + ticks);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -135,29 +124,30 @@ timer_print_stats (void) {
 }
 
 /* Timer interrupt handler. */
-/* running 중인 thread는 일정 시간이 지나면 ready, dying, blocked 되어야 하는데, 이를 수행하지 않을 경우를 대비한다. */
-/* timer 인터럽트는 매 tick 마다 ticks 라는 변수를 증가시킴으로써 시간을 잰다. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 
-/* ********** ********** ********** project 1 : advanced_scheduler (mlfqs) ********** ********** ********** */
-  if (thread_mlfqs) { // mlfqs option이 들어왔을 때만 advanced scheduler가 작동한다.
-    mlfqs_increment_recent_cpu ();
-    if (ticks % 4 == 0) {
-      mlfqs_recalculate_priority ();
-      // TIMER_FREQ 값은 1초에 몇 개의 ticks 이 실행되는지를 나타내는 값으로, thread.h에 100으로 정의되어 있다.
-      // 이에 따라, pintos kernel은 1초에 100 ticks가 실행되고, 1ticks = 1ms를 의미한다.
-      if (ticks % TIMER_FREQ == 0) {
-        mlfqs_recalculate_recent_cpu ();
-        mlfqs_calculate_load_avg ();
-      }
-    }
-  }
+	/** project1-Advanced Scheduler */	
+    if (thread_mlfqs) {
+        mlfqs_increment();
 
-/* ********** ********** ********** project 1 : alarm clock ********** ********** ********** */
-	thread_awake(ticks); // ticks가 증가할 때마다 awake 작업을 수행한다.
+        if (!(ticks % 4)) {
+            mlfqs_recalc_priority();
+
+            if (!(ticks % TIMER_FREQ)) {
+                mlfqs_load_avg();
+                mlfqs_recalc_recent_cpu();
+            }
+        }
+    }
+
+	/** project1-Alarm Clock */
+	if (get_next_tick_to_awake() <= ticks)
+	{
+	thread_awake(ticks);
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

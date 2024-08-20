@@ -9,7 +9,6 @@ syscall_entry:
 	movq %rsp, %rbx            /* Store userland rsp    */
 	movabs $tss, %r12
 	movq (%r12), %r12
-	/* rsp 값을 바꿔줌으로써 kernal stack으로 진입하게 된다. */
 	movq 4(%r12), %rsp         /* Read ring0 rsp from the tss */
 	/* Now we are in the kernel stack */
 	push $(SEL_UDSEG)      /* if->ss */

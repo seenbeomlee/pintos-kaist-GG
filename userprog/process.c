@@ -667,6 +667,19 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct vm_load_arg *aux_p = aux;
+	struct file *file = aux_p->file;
+	off_t offset = aux_p->ofs;
+	size_t page_read_bytes = aux_p->read_bytes;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+	file_seek(file, offset);                                                             
+	if (file_read(file, page->frame->kva, page_read_bytes) != (off_t)page_read_bytes) {  
+			palloc_free_page(page->frame->kva);                                            
+			return false;
+	}
+	memset(page->frame->kva + page_read_bytes, 0, page_zero_bytes);  
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -698,7 +711,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct vm_load_arg *aux = (struct vm_load_arg *)malloc(sizeof(struct vm_load_arg));
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
@@ -707,6 +724,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+
+		/** #project3-Anonymous Page */
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -721,7 +741,15 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+	/** Project 3-Memory Management */	
+	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1)) {  // MARKER_0로 STACK에 있는 것을 표시
+		success = vm_claim_page(stack_bottom);
 
+		if (success) {
+			if_->rsp = USER_STACK;
+			thread_current()->stack_bottom = stack_bottom;
+		}
+	}
 	return success;
 }
 #endif /* VM */

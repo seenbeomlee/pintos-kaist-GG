@@ -12,6 +12,7 @@
 *.errors
 *.result
 *results
+*.vscode
 
 # Object files
 *.o

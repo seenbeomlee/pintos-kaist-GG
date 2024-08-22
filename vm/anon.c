@@ -24,6 +24,9 @@ static const struct page_operations anon_ops = {
 static struct bitmap *swap_bitmap;
 static struct lock swap_lock;
 
+/** Project 3-Copy On Write */
+#include "include/threads/mmu.h"
+
 /* Initialize the data for anonymous pages */
 void
 vm_anon_init (void) {
@@ -113,4 +116,5 @@ anon_destroy (struct page *page) {
         free(page->frame);
         page->frame = NULL;
     }
+	pml4_clear_page(thread_current()->pml4, page->va); /** Project 3-Copy On Write */
 }

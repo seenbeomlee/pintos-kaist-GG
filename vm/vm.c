@@ -50,6 +50,9 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
+static bool 
+vm_copy_claim_page(struct supplemental_page_table *dst, void *va, void *kva, bool writable);
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -192,10 +195,25 @@ vm_stack_growth (void *addr UNUSED) {
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
+	/** Project 3-Copy On Write */
+    if (!page->accessible)
+        return false;
+
+    void *kva = page->frame->kva;
+
+    page->frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
+
+    if (page->frame->kva == NULL)
+        page->frame = vm_evict_frame();  
+		
+    memcpy(page->frame->kva, kva, PGSIZE);
+
+    if (!pml4_set_page(thread_current()->pml4, page->va, page->frame->kva, page->accessible))
+        return false;
+
+    return true;
 }
 
-/* Return true on success */
-/* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
@@ -306,11 +324,15 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
             if (!vm_alloc_page(type, upage, writable)) 
                 return false;
 
-            if (!vm_claim_page(upage))  
-                return false;
+			/** Project 3-Copy On Write */
+            // if (!vm_claim_page(upage))  
+            //     return false;
 
-            struct page *dst_page = spt_find_page(dst, upage); 
-            memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+            // struct page *dst_page = spt_find_page(dst, upage); 
+            // memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+
+			if (!vm_copy_claim_page(dst, upage, src_page->frame->kva, writable)) 
+                return false;
         }
     }
 
@@ -349,4 +371,32 @@ hash_page_destroy(struct hash_elem *e, void *aux)
     struct page *page = hash_entry(e, struct page, hash_elem);
     destroy(page);
     free(page);
+}
+
+/** Project 3-Copy On Write */
+static bool 
+vm_copy_claim_page(struct supplemental_page_table *dst, void *va, void *kva, bool writable) {
+    struct page *page = spt_find_page(dst, va);
+
+    if (page == NULL)
+        return false;
+
+    struct frame *frame = (struct frame *)malloc(sizeof(struct frame));
+
+    if (!frame)
+        return false;
+
+    page->accessible = writable; 
+    frame->page = page;
+    page->frame = frame;
+    frame->kva = kva;
+
+    if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, false)) {
+        free(frame);
+        return false;
+    }
+
+    list_push_back(&frame_table, &frame->frame_elem); 
+
+    return swap_in(page, frame->kva);
 }

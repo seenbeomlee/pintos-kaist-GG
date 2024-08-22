@@ -60,7 +60,9 @@ int sys_number = f->R.rax;
 
     // Argument 순서
     // %rdi %rsi %rdx %r10 %r8 %r9
-
+#ifdef VM
+    thread_current()->stack_pointer = f->rsp;
+#endif
     switch (sys_number) {
         case SYS_HALT:
             halt();
@@ -228,7 +230,11 @@ read(int fd, void *buffer, unsigned length)
 {
     struct thread *curr = thread_current();
     check_address(buffer);
-
+#ifdef VM
+    struct page *page = spt_find_page(&thread_current()->spt, buffer);
+    if (page && !page->writable)
+        exit(-1);
+#endif
     struct file *file = process_get_file(fd);
 
     if (file == STDIN) { 

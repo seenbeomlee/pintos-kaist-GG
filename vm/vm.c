@@ -157,6 +157,16 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+		/** Project 3-Stack Growth*/
+    bool success = false;
+		addr = pg_round_down(addr);
+    if (vm_alloc_page(VM_ANON | VM_MARKER_0, addr, true)) {
+        success = vm_claim_page(addr);
+
+        if (success) {
+            thread_current()->stack_bottom -= PGSIZE;
+        }
+    }
 }
 
 /* Handle the fault on write_protected page */
@@ -167,28 +177,35 @@ vm_handle_wp (struct page *page UNUSED) {
 /* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-	bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
-	/** Project 3-Memory Management */
-	struct page *page = spt_find_page(&thread_current()->spt, addr);
+
+	/** Project 3-Anonymous Page */
+	struct page *page = NULL;
 
     if (addr == NULL || is_kernel_vaddr(addr))
         return false;
 
     if (not_present)
     {
-        page = spt_find_page(spt, addr);
-        if (page == NULL)
-            return false;
-        if (write == 1 && page->writable == 0)
-            return false;
-        return vm_do_claim_page(page);
+		/** Project 3-Stack Growth*/
+		void *rsp = user ?  f->rsp : thread_current()->stack_pointer;
+		if (STACK_LIMIT <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK){
+			vm_stack_growth(addr);
+			return true;
+		}
+		else if (STACK_LIMIT <= rsp && rsp <= addr && addr <= USER_STACK){
+			vm_stack_growth(addr);
+			return true;
+		}
+		page = spt_find_page(spt, addr);
+
+		if (!page || (write && !page->writable))
+			return false;
+		
+		return vm_do_claim_page(page);
     }
     return false;
-
-	return vm_do_claim_page (page);
 }
 
 /* Free the page.

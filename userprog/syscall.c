@@ -139,14 +139,15 @@ struct page *check_address(void *addr) {
     return spt_find_page(&curr->spt, addr);
 }
 
-/** Project 3-Memory Mapped Files 버퍼 유효성 검사 */
+/** Project 3-Memory Mapped Files 버퍼 유효성 검사
+ * i++시 => tests/vm/page/merge-mm TIMEOUT
+ * tests/vm/page-merge-par - wait for child 1:FAILED
+ * tests/vm/page-merge-stk TIMEOUT
+ */
 void check_valid_buffer(void *buffer, size_t size, bool writable) {
-    for (size_t i = 0; i < size; i ++) { // i ++ or i += 8
+    for (size_t i = 0; i < size; i += 8) { // i ++ or i += 8 
         /* buffer가 spt에 존재하는지 검사 */
         struct page *page = check_address(buffer + i);
-
-        if (page == NULL)
-            exit(-1);
 
         if (!page || (writable && !(page->writable)))
             exit(-1);

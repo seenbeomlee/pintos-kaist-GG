@@ -8,6 +8,10 @@
 #include "threads/mmu.h"
 static struct list frame_table; 
 
+/** Project 3-Swap In/Out */
+struct lock frame_lock;
+struct list_elem *next = NULL;
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -19,9 +23,12 @@ vm_init (void) {
 #endif
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
-	/* TODO: Your code goes here. */
+
 	/** Project 3-Memory Management */
 	list_init(&frame_table);
+	
+	/** Project 3-Swap In/Out */
+	lock_init(&frame_lock);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -118,8 +125,19 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
-
+	/** Project 3-Swap In/Out */
+	lock_acquire(&frame_lock);
+	for (next = list_begin(&frame_table); next != list_end(&frame_table); next = list_next(next))
+	{
+		victim = list_entry(next, struct frame, frame_elem);
+		if (pml4_is_accessed(thread_current()->pml4, victim->page->va))
+			pml4_set_accessed(thread_current()->pml4, victim->page->va, false);
+		else{
+			lock_release(&frame_lock);
+			return victim;
+		}
+	}
+	lock_release(&frame_lock);
 	return victim;
 }
 
@@ -127,12 +145,12 @@ vm_get_victim (void) {
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
-
-	return NULL;
+	/** Project 3-Swap In/Out */
+	struct frame *victim = vm_get_victim ();
+	if (victim->page)
+		swap_out(victim->page);
+	return victim;
 }
-
 /* palloc() and get frame. If there is no available page, evict the page
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
@@ -177,37 +195,35 @@ vm_handle_wp (struct page *page UNUSED) {
 }
 
 /* Return true on success */
+/* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-
-	/** Project 3-Anonymous Page */
-	struct page *page = NULL;
+			
+    struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
+	/** Project 3-Copy On Write */
+    struct page *page = spt_find_page(&thread_current()->spt, addr);
 
     if (addr == NULL || is_kernel_vaddr(addr))
         return false;
 
-    if (not_present)
-    {
-		/** Project 3-Stack Growth*/
-		void *rsp = user ?  f->rsp : thread_current()->stack_pointer;
+    if (!not_present && write)
+        return vm_handle_wp(page);
+
+    if (!page) {
+        void *rsp = user ? f->rsp : thread_current()->stack_pointer;
 		if (STACK_LIMIT <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK){
-			vm_stack_growth(addr);
+			vm_stack_growth(thread_current()->stack_bottom - PGSIZE);
 			return true;
 		}
 		else if (STACK_LIMIT <= rsp && rsp <= addr && addr <= USER_STACK){
-			vm_stack_growth(addr);
+			vm_stack_growth(thread_current()->stack_bottom - PGSIZE);
 			return true;
 		}
-		page = spt_find_page(spt, addr);
-
-		if (!page || (write && !page->writable))
-			return false;
-		
-		return vm_do_claim_page(page);
+        return false;
     }
-    return false;
+
+    return vm_do_claim_page(page);  
 }
 
 /* Free the page.

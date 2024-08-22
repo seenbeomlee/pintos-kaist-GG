@@ -141,11 +141,12 @@ page_fault (struct intr_frame *f) {
 	user = (f->error_code & PF_U) != 0;
 
 	/** Project 3-Anonymous Page */
-	if ((!not_present && write) || (fault_addr < 0x400000 || fault_addr >= USER_STACK))
+	if ((!not_present && write) || (fault_addr < 0x400000))
 	{
 		exit(-1);
 	}
 
+/** #project3-Stack Growth */
 #ifdef VM
 	/* For project 3 and later. */
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
@@ -156,11 +157,6 @@ page_fault (struct intr_frame *f) {
 		exit(-1);
 	}
 #endif
-
-	/* Count page faults. */
-	page_fault_cnt++;
-
-	exit(-1); /** Project 3-Anonymous Page */
 
 	/* If the fault is true fault, show info and exit. */
 	printf ("Page fault at %p: %s error %s page in %s context.\n",

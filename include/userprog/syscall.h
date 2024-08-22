@@ -37,4 +37,14 @@ void check_address(void *addr);
 struct page *check_address(void *addr);
 #endif
 
+/** Project 3-Memory Mapped Files */
+#include "include/filesys/off_t.h";
+#include "stddef.h";
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
+
+extern struct lock filesys_lock;
+
+void check_valid_buffer(void *buffer, size_t size, bool writable);
+
 #endif /* userprog/syscall.h */

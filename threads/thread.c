@@ -803,7 +803,9 @@ donate_priority()
 	{
         if (t->wait_lock == NULL)
             break;
-
+				/** Project 3-Memory Mapped Files */
+				if (t == NULL)
+					break;
         t = t->wait_lock->holder;
         t->priority = priority;
     }

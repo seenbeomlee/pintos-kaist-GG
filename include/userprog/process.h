@@ -22,6 +22,8 @@ int process_close_file(int fd);
 /** Project 2-Extend File Descriptor */
 process_insert_file(int fd, struct file *f);
 
+bool lazy_load_segment(struct page *page, void *aux);
+
 #define STDIN 1
 #define STDOUT 2
 #define STDERR 3

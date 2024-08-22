@@ -109,6 +109,14 @@ int sys_number = f->R.rax;
         case SYS_DUP2:
             f->R.rax = dup2(f->R.rdi, f->R.rsi);
             break;
+#ifdef VM
+        case SYS_MMAP:
+            f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+            break;
+        case SYS_MUNMAP:
+            munmap(f->R.rdi);
+            break;
+#endif
         default:
             exit(-1);
     }
@@ -125,11 +133,24 @@ void check_address(void *addr) {
 /** Project 3-Anonymous Page */
 struct page *check_address(void *addr) {
     struct thread *curr = thread_current();
-
-    if (is_kernel_vaddr(addr) || addr == NULL || !spt_find_page(&curr->spt, addr))
+    if (is_kernel_vaddr(addr) || addr == NULL || !spt_find_page(&curr->spt, addr)) {
         exit(-1);
-
+    }
     return spt_find_page(&curr->spt, addr);
+}
+
+/** Project 3-Memory Mapped Files 버퍼 유효성 검사 */
+void check_valid_buffer(void *buffer, size_t size, bool writable) {
+    for (size_t i = 0; i < size; i ++) { // i ++ or i += 8
+        /* buffer가 spt에 존재하는지 검사 */
+        struct page *page = check_address(buffer + i);
+
+        if (page == NULL)
+            exit(-1);
+
+        if (!page || (writable && !(page->writable)))
+            exit(-1);
+    }
 }
 #endif
 
@@ -186,7 +207,11 @@ create(const char *file, unsigned initial_size)
 {
     check_address(file);
 
-    return filesys_create(file, initial_size);
+    lock_acquire(&filesys_lock);
+    bool success = filesys_create(file, initial_size);
+    lock_release(&filesys_lock);
+
+    return success;
 }
 
 bool 
@@ -194,24 +219,34 @@ remove(const char *file)
 {
     check_address(file);
 
-    return filesys_remove(file);
+    lock_acquire(&filesys_lock);
+    bool success = filesys_remove(file);
+    lock_release(&filesys_lock);
+
+    return success;
 }
 
 int 
 open(const char *file) 
 {
     check_address(file);
+
+    lock_acquire(&filesys_lock);
     struct file *newfile = filesys_open(file);
 
     if (newfile == NULL)
-        return -1;
+        goto err;
 
     int fd = process_add_file(newfile);
 
     if (fd == -1)
         file_close(newfile);
 
+    lock_release(&filesys_lock);
     return fd;
+err:
+    lock_release(&filesys_lock);
+    return -1;
 }
 
 int 
@@ -228,13 +263,11 @@ filesize(int fd) {
 int 
 read(int fd, void *buffer, unsigned length) 
 {
-    struct thread *curr = thread_current();
-    check_address(buffer);
 #ifdef VM
-    struct page *page = spt_find_page(&thread_current()->spt, buffer);
-    if (page && !page->writable)
-        exit(-1);
+    check_valid_buffer(buffer, length, true);
 #endif
+    check_address(buffer);
+    
     struct file *file = process_get_file(fd);
 
     if (file == STDIN) { 
@@ -251,7 +284,7 @@ read(int fd, void *buffer, unsigned length)
         return i;
     }
 
-    if (file == NULL || file == STDOUT || file == STDERR)  // 빈 파일, stdout, stderr를 읽으려고 할 경우
+    if (file == NULL || file == STDOUT || file == STDERR)  
         return -1;
 
     off_t bytes = -1;
@@ -267,35 +300,31 @@ read(int fd, void *buffer, unsigned length)
 int 
 write(int fd, const void *buffer, unsigned length) 
 {
+#ifdef VM
+    check_valid_buffer(buffer, length, false);
+#endif
     check_address(buffer);
 
-    struct thread *curr = thread_current();
+    lock_acquire(&filesys_lock);
     off_t bytes = -1;
 
     struct file *file = process_get_file(fd);
 
     if (file == STDIN || file == NULL)  
-        return -1;
+        goto done;
 
-    if (file == STDOUT) { 
-
+    if (file == STDOUT || file == STDERR) {  
         putbuf(buffer, length);
-        return length;
+        bytes = length;
+        goto done;
     }
 
-    if (file == STDERR) { 
-
-        putbuf(buffer, length);
-        return length;
-    }
-
-    lock_acquire(&filesys_lock);
     bytes = file_write(file, buffer, length);
-    lock_release(&filesys_lock);
 
+done:
+    lock_release(&filesys_lock);
     return bytes;
 }
-
 void 
 seek(int fd, unsigned position) 
 {
@@ -376,3 +405,33 @@ int dup2(int oldfd, int newfd) {
 
     return newfd;
 }
+
+/** Project 3-Memory Mapped FIles */
+#ifdef VM
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset) {
+    if (!addr || pg_round_down(addr) != addr || is_kernel_vaddr(addr) || is_kernel_vaddr(addr + length))
+        return NULL;
+
+    if (offset != pg_round_down(offset) || offset % PGSIZE != 0)
+        return NULL;
+
+    if (spt_find_page(&thread_current()->spt, addr))
+        return NULL;
+
+    struct file *file = process_get_file(fd);
+
+    if ((file >= STDIN && file <= STDERR) || file == NULL)
+        return NULL;
+
+    if (file_length(file) == 0 || (long)length <= 0)
+        return NULL;
+
+    return do_mmap(addr, length, writable, file, offset);
+}
+
+/** Project 3-Memory Mapped Files */
+void munmap(void *addr) {
+    do_munmap(addr);
+}
+
+#endif
